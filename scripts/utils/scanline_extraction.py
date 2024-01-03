@@ -10,12 +10,13 @@ def sort_pcd(pcd: np.ndarray,
 
 def find_knickpoints(pcd: np.ndarray, 
                      threshold: int = 100, 
-                     col: int = -2) -> Tuple[np.ndarray, np.ndarray]:
+                     horiz_angle: int = -2,
+                     vert_angle: int = -1) -> Tuple[np.ndarray, np.ndarray]:
     # Sort the pcd based on the second last column
-    pcd = sort_pcd(pcd, col=col)
+    pcd = sort_pcd(pcd, col=horiz_angle)
     
     # Calculate the absolute difference of the last column
-    vertical_ang_diff = abs(np.diff(pcd[:, -1]))
+    vertical_ang_diff = abs(np.diff(pcd[:, vert_angle]))
     
     # Append the last value of vertical_ang_diff to itself
     vertical_ang_diff = np.append(vertical_ang_diff, vertical_ang_diff[-1])

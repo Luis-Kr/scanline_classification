@@ -1,8 +1,11 @@
 defaults:
   - _self_
 
+col_pcd:
+  vert_angle: -1
+  horiz_angle: -2
+
 sce:
-  col: -2
   threshold: 100
   fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u"
 

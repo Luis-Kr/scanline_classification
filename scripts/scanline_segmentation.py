@@ -34,13 +34,14 @@ def pcd_preprocessing(cfg: DictConfig):
     
     pcd, knickpoints = sce.find_knickpoints(pcd=pcd, 
                                             threshold=cfg.sce.threshold, 
-                                            col=cfg.sce.col)
+                                            horiz_angle=cfg.col_pcd.horiz_angle,
+                                            vert_angle=cfg.col_pcd.vert_angle)
     
     # Extract the scanlines
     logger.info('Extracting the scanlines...')
     
     n = pcd.shape[0]
-    scanlines = np.zeros(len(pcd), dtype=np.float64)
+    scanlines = np.zeros(n, dtype=np.float64)
     scanlines = sce.scanline_extraction(n, 
                                         scanlines, 
                                         knickpoints)
