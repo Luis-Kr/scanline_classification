@@ -1,3 +1,4 @@
 data/
 scripts/test/
+scripts/utils/__pycache__/
 outputs/
