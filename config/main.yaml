@@ -1,0 +1,9 @@
+defaults:
+  - _self_
+
+sce:
+  col: -2
+  threshold: 100
+  fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u"
+
+save_pcd: False
