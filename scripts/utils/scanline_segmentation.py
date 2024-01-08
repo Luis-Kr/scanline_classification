@@ -211,6 +211,9 @@ def calculate_curvature(slope: np.ndarray) -> np.ndarray:
 
 @njit(parallel=True)
 def calculate_segmentation_metrics(pcd: np.ndarray,
+                                   x_col: int,
+                                   y_col: int,
+                                   z_col: int,
                                    sort_col: int,
                                    scanline_id_col: int,
                                    rho_col: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -219,6 +222,9 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
 
     Parameters:
     pcd (np.ndarray): The point cloud array.
+    x_col (int): The column index containing the x coordinates.
+    y_col (int): The column index containing the y coordinates.
+    z_col (int): The column index containing the z coordinates.
     sort_col (int): The column index to sort the pcd by.
     scanline_id_col (int): The column index to extract the scanline ids from.
     rho_col (int): The column index containing the rho values.
@@ -245,7 +251,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         
         # Calculate the rho_diff, slope, and curvature for the current scanline
         rho_diff_i = calculate_rho_diff(scanline, col=rho_col)
-        slope_i = calculate_slope(scanline)
+        slope_i = calculate_slope(scanline, x_col=x_col, y_col=y_col, z_col=z_col)
         curvature_i = calculate_curvature(slope_i)
         
         # Store the calculated metrics in the corresponding arrays
