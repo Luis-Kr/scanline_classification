@@ -124,7 +124,7 @@ def calculate_binned_distances(mean_distances: np.ndarray,
     np.ndarray: The binned distances.
     """
     # Initialize array for binned distances
-    binned_distances = np.zeros(len(bins))
+    binned_distances = np.zeros(bins.shape[0])
     
     # For each bin, calculate mean distance
     for i in range(bins.shape[0]):
