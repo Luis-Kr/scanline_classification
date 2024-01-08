@@ -78,6 +78,9 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
 def scanline_segmentation(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logger):    
     logger.info('Calculating the segmentation metrics rho_diff, slope and curvature...')
     rho_diff, slope, curvature, pcd_sorted = scs.calculate_segmentation_metrics(pcd, 
+                                                                                x_col=cfg.pcd_col.x,
+                                                                                y_col=cfg.pcd_col.y,
+                                                                                z_col=cfg.pcd_col.z,
                                                                                 sort_col=cfg.pcd_col.vert_angle,
                                                                                 scanline_id_col=cfg.pcd_col.scanline_id,
                                                                                 rho_col=cfg.pcd_col.rho)
@@ -85,7 +88,8 @@ def scanline_segmentation(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logg
     # Add the segmentation metrics to the point cloud data
     logger.info('Sorting the PCD...')
     pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature]
-    pcd_sorted = pcd_sorted[np.lexsort(np.rot90(pcd_sorted[:,(11,9)]))]
+    pcd_sorted = pcd_sorted[np.lexsort(np.rot90(pcd_sorted[:,(cfg.pcd_col.scanline_id,
+                                                              cfg.pcd_col.vert_angle)]))]
     
     logger.info('Scanline segmentation...')
     segment_ids = scs.scanline_segmentation(pcd_sorted,
