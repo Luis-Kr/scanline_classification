@@ -32,5 +32,10 @@ scs:
   slope_threshold: 0.25
   curvature_threshold: 45
   fmt:  "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %1.6f %u %1.6f %1.6f %1.6f %u"
-  save_pcd: True
+  save_pcd: False
+
+scsb:
+  fmt:  "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %1.4f %1.4f %1.4f %u %u %u %1.4f %1.4f %1.4f %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
+  save_pcd: False
+
 
