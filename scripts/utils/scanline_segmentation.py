@@ -1,10 +1,9 @@
 import numpy as np
-import logging
 from typing import Tuple
 from numba import jit, njit, prange
 
 
-@jit(nopython=True) 
+@njit()
 def sort_scanline(pcd: np.ndarray, 
                   col: int) -> np.ndarray:
     """
@@ -22,7 +21,7 @@ def sort_scanline(pcd: np.ndarray,
     return pcd[pcd[:, col].argsort()]
 
 
-@jit(nopython=True) 
+@njit()
 def get_scanline_ids(pcd: np.ndarray,
                      col: int) -> np.ndarray:
     """
@@ -39,7 +38,7 @@ def get_scanline_ids(pcd: np.ndarray,
     return np.unique(pcd[:, col])
 
 
-@jit(nopython=True) 
+@njit()
 def get_scanline(pcd: np.ndarray, 
                  col: int, 
                  id: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -64,7 +63,7 @@ def get_scanline(pcd: np.ndarray,
     return scanline, scanline_indices
 
 
-@jit(nopython=True) 
+@njit()
 def calculate_rho_diff(pcd: np.ndarray, 
                        col: int) -> np.ndarray:
     """
@@ -87,7 +86,7 @@ def calculate_rho_diff(pcd: np.ndarray,
     return rho_diff
 
 
-@jit(nopython=True) 
+@njit()
 def get_dist_3D(x1: float, 
                 y1: float, 
                 z1: float, 
@@ -108,7 +107,7 @@ def get_dist_3D(x1: float,
     return np.sqrt(np.abs(((x2 - x1) ** 2) + ((y2 - y1) ** 2)) + ((z2 - z1) ** 2))
 
 
-@jit(nopython=True) 
+@njit()
 def get_slope_3D(x1: float, 
                  y1: float, 
                  z1: float, 
@@ -142,8 +141,8 @@ def get_slope_3D(x1: float,
         else:
             return np.round((z1 - z2) / dist, 4)
 
-
-@jit(nopython=True) 
+ 
+@njit()
 def calculate_slope(scanline: np.ndarray,
                     x_col: int=0,
                     y_col: int=1,
@@ -184,7 +183,7 @@ def calculate_slope(scanline: np.ndarray,
     return np.abs(slope)
 
 
-@jit(nopython=True) 
+@njit()
 def calculate_curvature(slope: np.ndarray) -> np.ndarray:
     """
     Calculates the curvature of a scanline based on its slope.
