@@ -51,7 +51,7 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
                                     bin_size=cfg.sce.bin_size)
 
     # Calculate binned distances
-    binned_distances = sce.calculate_binned_distances(mean_distances=mean_distances, 
+    binned_distances = sce.calculate_binned_distances(max_distances=mean_distances, 
                                                       binned_data=binned_pcd, 
                                                       bins=bins)
 
@@ -77,18 +77,20 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
 
 
 def scanline_segmentation(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logger):    
-    logger.info('Calculating the segmentation metrics rho_diff, slope and curvature...')
-    rho_diff, slope, curvature, pcd_sorted = scs.calculate_segmentation_metrics(pcd, 
+    logger.info('Calculating the segmentation metrics rho_diff, slope, curvature and normals...')
+    scanner_pos = np.mean(pcd[:, (cfg.pcd_col.x, cfg.pcd_col.y, cfg.pcd_col.z)], axis=0)
+    rho_diff, slope, curvature, normals, pcd_sorted = scs.calculate_segmentation_metrics(pcd, 
                                                                                 x_col=cfg.pcd_col.x,
                                                                                 y_col=cfg.pcd_col.y,
                                                                                 z_col=cfg.pcd_col.z,
                                                                                 sort_col=cfg.pcd_col.vert_angle,
                                                                                 scanline_id_col=cfg.pcd_col.scanline_id,
-                                                                                rho_col=cfg.pcd_col.rho)
+                                                                                rho_col=cfg.pcd_col.rho,
+                                                                                scanner_pos=scanner_pos)
     
     # Add the segmentation metrics to the point cloud data
     logger.info('Sorting the PCD...')
-    pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature]
+    pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, normals]
     pcd_sorted = pcd_sorted[np.lexsort(np.rot90(pcd_sorted[:,(cfg.pcd_col.scanline_id,
                                                               cfg.pcd_col.vert_angle)]))]
     
