@@ -3,3 +3,4 @@ scripts/test/
 scripts/utils/__pycache__/
 outputs/
 .DS_Store
+scripts/utils/__pycache__/scanline_extraction.cpython-310.pyc
