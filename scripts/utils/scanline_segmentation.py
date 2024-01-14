@@ -208,6 +208,61 @@ def calculate_curvature(slope: np.ndarray) -> np.ndarray:
     return curvature
 
 
+@njit()
+def orient_cross_product(vector_ba: np.ndarray, 
+                         vector_bc: np.ndarray, 
+                         viewpoint: np.ndarray) -> np.ndarray:
+    """
+    Orient the cross product (normal) of two vectors towards a viewpoint.
+
+    Parameters:
+    vector_ba (np.ndarray): The first vector.
+    vector_bc (np.ndarray): The second vector.
+    viewpoint (np.ndarray): The viewpoint.
+
+    Returns:
+    np.ndarray: The oriented cross product of the two vectors.
+    """
+    # Calculate the cross product of the two vectors
+    cross_product = np.cross(vector_ba, vector_bc)
+    
+    # Calculate the vector from the cross product to the viewpoint
+    vector_to_viewpoint = viewpoint - cross_product
+    
+    # If the cross product is not oriented towards the viewpoint, flip it
+    if np.dot(cross_product, vector_to_viewpoint) < 0:
+        cross_product = np.cross(vector_bc, vector_ba)
+    
+    return cross_product
+
+
+@njit()
+def compute_normals(pcd_scanline, scanner_pos, x_col, y_col, z_col):
+    normals = np.zeros((pcd_scanline.shape[0], 3))
+    
+    pcd_x = pcd_scanline[:, x_col]
+    pcd_y = pcd_scanline[:, y_col]
+    pcd_z = pcd_scanline[:, z_col]
+    pcd_scanline_xyz = np.column_stack((pcd_x, pcd_y, pcd_z))
+    
+    for i in prange(pcd_scanline_xyz.shape[0]):
+        if i == 0:
+            #normal = np.cross(pcd_scanline_xyz[i+1], pcd_scanline_xyz[i])
+            normal = orient_cross_product(pcd_scanline_xyz[i+1], pcd_scanline_xyz[i], scanner_pos)
+            normals[i] = ( normal / np.linalg.norm(normal) ) / 1
+        elif i <= pcd_scanline_xyz.shape[0]-2:
+            #normal = np.cross(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i+1])
+            normal = orient_cross_product(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i+1], scanner_pos)
+            normals[i] = (normal / np.linalg.norm(normal)) / 1
+        else:
+            #normal = np.cross(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i])
+            normal = orient_cross_product(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i], scanner_pos)
+            normals[i] = (normal / np.linalg.norm(normal)) / 1
+
+    return normals
+
+
+
 @njit(parallel=True)
 def calculate_segmentation_metrics(pcd: np.ndarray,
                                    x_col: int,
@@ -215,7 +270,8 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                    z_col: int,
                                    sort_col: int,
                                    scanline_id_col: int,
-                                   rho_col: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                                   rho_col: int,
+                                   scanner_pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Calculates the segmentation metrics (rho_diff, slope and curvature) for each scanline.
 
@@ -242,6 +298,8 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     rho_diff = np.zeros(pcd.shape[0])
     slope = np.zeros(pcd.shape[0])
     curvature = np.zeros(pcd.shape[0])
+    normals = np.zeros((pcd.shape[0], 3))
+    #scanner_pos = np.array([0,0,0])
 
     # Calculate the segmentation metrics for each scanline
     for i in prange(scanline_ids.shape[0]):
@@ -252,14 +310,16 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         rho_diff_i = calculate_rho_diff(scanline, col=rho_col)
         slope_i = calculate_slope(scanline, x_col=x_col, y_col=y_col, z_col=z_col)
         curvature_i = calculate_curvature(slope_i)
+        normals_i = compute_normals(scanline, scanner_pos, x_col, y_col, z_col)
         
         # Store the calculated metrics in the corresponding arrays
         for j in prange(scanline.shape[0]):
             rho_diff[scanline_indices[j]] = rho_diff_i[j]
             slope[scanline_indices[j]] = slope_i[j]
             curvature[scanline_indices[j]] = curvature_i[j]
+            normals[scanline_indices[j]] = normals_i[j]
 
-    return rho_diff, slope, curvature, pcd
+    return rho_diff, slope, curvature, normals, pcd
 
 
 @njit(parallel=True)
