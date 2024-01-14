@@ -19,19 +19,22 @@ pcd_col:
   rho_diff: 12
   slope: 13
   curvature: 14
-  segment_ids: 15
+  nx: 15
+  ny: 16
+  nz: 17
+  segment_ids: 18
 
 sce:
   threshold: 100
   bin_size: 0.5
   fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %1.6f %u"
-  save_pcd: False
+  save_pcd: True
 
 scs:
   expected_value_factor: 50
   slope_threshold: 0.25
   curvature_threshold: 45
-  fmt:  "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %1.6f %u %1.6f %1.6f %1.6f %u"
+  fmt:  "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %1.6f %u %1.6f %1.6f %1.6f %1.4f %1.4f %1.4f %u"
   save_pcd: False
 
 scsb:
