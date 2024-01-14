@@ -79,8 +79,8 @@ def create_kdtree(points: np.ndarray,
     # Query for k nearest neighbors
     distances, indices = tree.query(points, workers=-1, k=k)
     
-    # Calculate mean of k nearest distances, excluding self (index 0)
-    mean_distances = np.mean(distances[:, 1:k], axis=1)
+    # Calculate max of k nearest distances, excluding self (index 0)
+    mean_distances = np.max(distances[:, 1:k], axis=1)
     
     # Replace zero distances with a small number
     mean_distances = np.where(mean_distances == 0, 0.000001, mean_distances)
@@ -109,11 +109,11 @@ def bin_data(data: np.ndarray,
     return bins, binned_data
 
 
-def calculate_binned_distances(mean_distances: np.ndarray, 
+def calculate_binned_distances(max_distances: np.ndarray, 
                                binned_data: np.ndarray, 
                                bins: np.ndarray) -> np.ndarray:
     """
-    Calculates the mean distance for each bin.
+    Calculates the max distance for each bin.
 
     Parameters:
     mean_distances (np.ndarray): The mean distances to calculate the binned distances from.
@@ -128,9 +128,9 @@ def calculate_binned_distances(mean_distances: np.ndarray,
     
     # For each bin, calculate mean distance
     for i in range(bins.shape[0]):
-        bin_distance = mean_distances[binned_data == i]
+        bin_distance = max_distances[binned_data == i]
         if len(bin_distance) > 0:
-            binned_distances[i] = np.mean(bin_distance)
+            binned_distances[i] = np.max(bin_distance)
     
     # Replace zero distances with NaN
     binned_distances[binned_distances == 0] = np.nan
