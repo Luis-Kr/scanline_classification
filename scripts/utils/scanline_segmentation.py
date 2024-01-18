@@ -16,9 +16,9 @@ def sort_scanline(pcd: np.ndarray,
     Returns:
     np.ndarray: The sorted point cloud data array.
     """
-    
     # Sort the pcd by the specified column and return the sorted pcd
-    return pcd[pcd[:, col].argsort()]
+    sort_idx = np.argsort(pcd[:, col])
+    return pcd[sort_idx], sort_idx
 
 
 @njit()
@@ -268,10 +268,8 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                    x_col: int,
                                    y_col: int,
                                    z_col: int,
-                                   sort_col: int,
                                    scanline_id_col: int,
-                                   rho_col: int,
-                                   scanner_pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                                   rho_col: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Calculates the segmentation metrics (rho_diff, slope and curvature) for each scanline.
 
@@ -287,10 +285,6 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     Returns:
     tuple: A tuple of three arrays, each containing one of the segmentation metrics (rho_diff, slope, curvature, sorted pcd) for the pcd.
     """
-    
-    # Sort the pcd by the vertical angle
-    pcd = sort_scanline(pcd, col=sort_col)
-    
     # Extract the unique scanline ids from the pcd
     scanline_ids = get_scanline_ids(pcd, col=scanline_id_col)
     
@@ -298,8 +292,6 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     rho_diff = np.zeros(pcd.shape[0])
     slope = np.zeros(pcd.shape[0])
     curvature = np.zeros(pcd.shape[0])
-    normals = np.zeros((pcd.shape[0], 3))
-    #scanner_pos = np.array([0,0,0])
 
     # Calculate the segmentation metrics for each scanline
     for i in prange(scanline_ids.shape[0]):
@@ -310,16 +302,14 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         rho_diff_i = calculate_rho_diff(scanline, col=rho_col)
         slope_i = calculate_slope(scanline, x_col=x_col, y_col=y_col, z_col=z_col)
         curvature_i = calculate_curvature(slope_i)
-        normals_i = compute_normals(scanline, scanner_pos, x_col, y_col, z_col)
         
         # Store the calculated metrics in the corresponding arrays
         for j in prange(scanline.shape[0]):
             rho_diff[scanline_indices[j]] = rho_diff_i[j]
             slope[scanline_indices[j]] = slope_i[j]
             curvature[scanline_indices[j]] = curvature_i[j]
-            normals[scanline_indices[j]] = normals_i[j]
 
-    return rho_diff, slope, curvature, normals, pcd
+    return rho_diff, slope, curvature
 
 
 @njit(parallel=True)
