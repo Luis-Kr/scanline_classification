@@ -41,17 +41,21 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
     
     ## Calculate the mean point-to-point distances as expected values for the segmentation
     # Create a KDTree and calculate mean distances
-    logger.info('Calculating the mean point-to-point distances...')
-    mean_distances, _ = sce.create_kdtree(points=pcd[:, (cfg.pcd_col.x,
-                                                         cfg.pcd_col.y,
-                                                         cfg.pcd_col.z)])
+    logger.info('Calculating the max point-to-point distances...')
+    max_distances, pcd_centered, normals = sce.kdtree_maxdist_normals(pcd=pcd[:, (cfg.pcd_col.x,
+                                                                    cfg.pcd_col.y,
+                                                                    cfg.pcd_col.z)],
+                                                        num_nearest_neighbors=cfg.sce.k_nn)
+    
+    normals_xyz, normals = sce.align_normals_with_scanner_pos(pcd=pcd_centered, 
+                                                              normals=normals)
 
     # Bin the data
     bins, binned_pcd = sce.bin_data(data=pcd[:, cfg.pcd_col.rho],
                                     bin_size=cfg.sce.bin_size)
 
     # Calculate binned distances
-    binned_distances = sce.calculate_binned_distances(max_distances=mean_distances, 
+    binned_distances = sce.calculate_binned_distances(max_distances=max_distances, 
                                                       binned_data=binned_pcd, 
                                                       bins=bins)
 
@@ -73,24 +77,29 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
         np.savetxt(Path(root_dir) / 'data/02_raw_plus_scanline_extraction/SiteA_Scans_Global_I_RGB_RHV/Scan01_with_scanlineID.asc', 
                    pcd, fmt=cfg.sce.fmt, delimiter=' ')
     
-    return pcd
+    return pcd, normals_xyz, normals
 
 
-def scanline_segmentation(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logger):    
+def scanline_segmentation(cfg: DictConfig, 
+                          pcd: np.ndarray, 
+                          logger: logging.Logger, 
+                          normals_xyz: np.ndarray, 
+                          normals: np.ndarray):    
     logger.info('Calculating the segmentation metrics rho_diff, slope, curvature and normals...')
-    scanner_pos = np.mean(pcd[:, (cfg.pcd_col.x, cfg.pcd_col.y, cfg.pcd_col.z)], axis=0)
-    rho_diff, slope, curvature, normals, pcd_sorted = scs.calculate_segmentation_metrics(pcd, 
-                                                                                x_col=cfg.pcd_col.x,
-                                                                                y_col=cfg.pcd_col.y,
-                                                                                z_col=cfg.pcd_col.z,
-                                                                                sort_col=cfg.pcd_col.vert_angle,
-                                                                                scanline_id_col=cfg.pcd_col.scanline_id,
-                                                                                rho_col=cfg.pcd_col.rho,
-                                                                                scanner_pos=scanner_pos)
+    
+    # Sort the pcd by the vertical angle
+    pcd_sorted, sort_indices = scs.sort_scanline(pcd, col=cfg.pcd_col.vert_angle)
+    
+    rho_diff, slope, curvature = scs.calculate_segmentation_metrics(pcd=pcd_sorted, 
+                                                                    x_col=cfg.pcd_col.x,
+                                                                    y_col=cfg.pcd_col.y,
+                                                                    z_col=cfg.pcd_col.z,
+                                                                    scanline_id_col=cfg.pcd_col.scanline_id,
+                                                                    rho_col=cfg.pcd_col.rho)
     
     # Add the segmentation metrics to the point cloud data
     logger.info('Sorting the PCD...')
-    pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, normals]
+    pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, normals_xyz[sort_indices], normals[sort_indices]]
     pcd_sorted = pcd_sorted[np.lexsort(np.rot90(pcd_sorted[:,(cfg.pcd_col.scanline_id,
                                                               cfg.pcd_col.vert_angle)]))]
     
@@ -104,7 +113,12 @@ def scanline_segmentation(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logg
                                             slope_threshold=cfg.scs.slope_threshold,
                                             curvature_threshold=cfg.scs.curvature_threshold)
     
-    pcd_segmented = np.c_[pcd_sorted, segment_ids]
+    # Split pcd_sorted into two parts
+    pcd_sorted_left = pcd_sorted[:, :-6]
+    pcd_sorted_right = pcd_sorted[:, -6:]
+
+    # Concatenate pcd_sorted_left, segment_ids, and pcd_sorted_right
+    pcd_segmented = np.c_[pcd_sorted_left, segment_ids, pcd_sorted_right]
     
     if cfg.scs.save_pcd:
         logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / "data/raw_plus_scanline_plus_segmentation/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation.asc"}')
@@ -122,7 +136,7 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
     segment_classes = np.array(list(set(pcd[:,cfg.pcd_col.segment_ids])))
     
     # Initialize the processed segments array
-    processed_segments = np.zeros((segment_classes.shape[0], 57))
+    processed_segments = np.zeros((segment_classes.shape[0], 99))
     
     # Get the number of points in each segment
     _, counts = np.unique(pcd[:,cfg.pcd_col.segment_ids], return_counts=True)
@@ -143,14 +157,18 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
                                                    rho_col=cfg.pcd_col.rho,
                                                    slope_col=cfg.pcd_col.slope,
                                                    curvature_col=cfg.pcd_col.curvature,
-                                                   segment_ids_col=cfg.pcd_col.segment_ids)
+                                                   segment_ids_col=cfg.pcd_col.segment_ids,
+                                                   normals_xyz_col=np.array([cfg.pcd_col.nx_xyz,
+                                                                    cfg.pcd_col.ny_xyz,
+                                                                    cfg.pcd_col.nz_xyz]),
+                                                   normals_col=np.array([cfg.pcd_col.nx,
+                                                                cfg.pcd_col.ny,
+                                                                cfg.pcd_col.nz]))
     
     if cfg.scsb.save_pcd:
         logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / "data/04_raw_plus_scanline_plus_segmentation_plus_subsampling/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation_Subsampling.asc"}')
         np.savetxt(Path(root_dir) / "data/04_raw_plus_scanline_plus_segmentation_plus_subsampling/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation_Subsampling.asc", 
                    pcd_processed_segments, fmt=cfg.scsb.fmt, delimiter=' ')
-    
-    print(pcd_processed_segments.shape)
 
 
 
@@ -168,13 +186,20 @@ def main(cfg: DictConfig):
         pass
     
     # PCD preprocessing
-    pcd=pcd_preprocessing(cfg=cfg, logger=logger)
+    pcd, normals_xyz, normals=pcd_preprocessing(cfg=cfg, 
+                                                logger=logger)
     
     # PCD scanline segmentation
-    pcd_segmented=scanline_segmentation(cfg=cfg, pcd=pcd, logger=logger)
+    pcd_segmented=scanline_segmentation(cfg=cfg, 
+                                        pcd=pcd, 
+                                        logger=logger, 
+                                        normals_xyz=normals_xyz, 
+                                        normals=normals)
     
     # PCD scanline subsampling
-    scanline_subsampling(cfg=cfg, pcd=pcd_segmented, logger=logger)
+    scanline_subsampling(cfg=cfg, 
+                         pcd=pcd_segmented, 
+                         logger=logger)
 
 
 if __name__=='__main__':
