@@ -79,13 +79,13 @@ def create_kdtree(points: np.ndarray,
     # Query for k nearest neighbors
     distances, indices = tree.query(points, workers=-1, k=k)
     
-    # Calculate max of k nearest distances, excluding self (index 0)
-    mean_distances = np.max(distances[:, 1:k], axis=1)
+    # Calculate max of 4 nearest distances, excluding self (index 0)
+    max_distances = np.max(distances[:, 1:5], axis=1)
     
     # Replace zero distances with a small number
-    mean_distances = np.where(mean_distances == 0, 0.000001, mean_distances)
+    #max_distances = np.where(max_distances == 0, 0.000001, max_distances)
     
-    return mean_distances, indices
+    return max_distances, indices
 
 
 def bin_data(data: np.ndarray, 
@@ -181,3 +181,61 @@ def add_expected_value_distance(pcd: np.ndarray,
     pcd = np.c_[pcd, expected_value_distance]
     
     return pcd
+
+
+@njit(parallel=True)
+def compute_normals_numba(indices, point_clouds):
+    # Initialize an empty array to store the normals
+    normals = np.empty((indices.shape[0],3))
+
+    # Loop over all indices in parallel
+    for i in prange(indices.shape[0]):
+        # Select the i-th point cloud from point_clouds
+        point_cloud = point_clouds[i]
+
+        # Compute the covariance matrix of point_cloud and find its eigenvectors
+        _, eigenvectors = np.linalg.eigh(np.cov(point_cloud.T))
+        
+        # The first eigenvector (corresponding to the smallest eigenvalue) is the normal of the point cloud
+        normals[i] = eigenvectors[:, 0]          
+
+    return normals
+
+
+def kdtree_maxdist_normals(pcd, num_nearest_neighbors=4):
+    pcd_centered = pcd[:,:3] - np.mean(pcd[:,:3], axis=0)
+    
+    # Build a k-d tree from point_clouds for efficient nearest neighbor search
+    kdtree = cKDTree(pcd_centered)
+
+    # Query the k-d tree for the num_nearest_neighbors nearest neighbors of each point in point_clouds
+    distances, indices = kdtree.query(pcd_centered, k=num_nearest_neighbors, workers=-1)
+    
+    # Calculate max of 4 nearest distances, excluding self (index 0)
+    max_distances = np.max(distances[:, 1:5], axis=1)
+
+    # Select the point clouds corresponding to the indices
+    point_clouds = pcd_centered[indices]
+
+    # Compute the normals of the selected point clouds
+    normals = compute_normals_numba(indices, point_clouds)
+
+    # Clear the indices to free up memory
+    indices = None
+    point_clouds = None
+
+    return max_distances, pcd_centered, normals
+
+
+def align_normals_with_scanner_pos(pcd, normals):
+    # Calculate the orientation of the points with respect to the scanner position
+    # -normals_xyz point normals are facing the scanner
+    normals_xyz = pcd / np.linalg.norm(pcd, axis=1, keepdims=True)
+
+    # Calculate the dot product of each normal with the scanner direction
+    dot_product = np.einsum('ij,ij->i', normals, -normals_xyz)
+
+    # Flip the normals where the dot product is negative
+    normals[dot_product < 0] *= -1
+
+    return -normals_xyz, normals
