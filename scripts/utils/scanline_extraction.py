@@ -202,7 +202,7 @@ def compute_normals_numba(indices, point_clouds):
     return normals
 
 
-def kdtree_maxdist_normals(pcd, num_nearest_neighbors=4):
+def kdtree_maxdist_normals(cfg, pcd, num_nearest_neighbors=4):
     pcd_centered = pcd[:,:3] - np.mean(pcd[:,:3], axis=0)
     
     # Build a k-d tree from point_clouds for efficient nearest neighbor search
@@ -213,6 +213,9 @@ def kdtree_maxdist_normals(pcd, num_nearest_neighbors=4):
     
     # Calculate max of 4 nearest distances, excluding self (index 0)
     max_distances = np.max(distances[:, 1:5], axis=1)
+    
+    if not cfg.sce.calculate_normals:
+        return max_distances, pcd_centered, None
 
     # Select the point clouds corresponding to the indices
     point_clouds = pcd_centered[indices]
@@ -227,10 +230,13 @@ def kdtree_maxdist_normals(pcd, num_nearest_neighbors=4):
     return max_distances, pcd_centered, normals
 
 
-def align_normals_with_scanner_pos(pcd, normals):
+def align_normals_with_scanner_pos(cfg, pcd, normals):
     # Calculate the orientation of the points with respect to the scanner position
     # -normals_xyz point normals are facing the scanner
     normals_xyz = pcd / np.linalg.norm(pcd, axis=1, keepdims=True)
+    
+    if not cfg.sce.calculate_normals:
+        return -normals_xyz, None
 
     # Calculate the dot product of each normal with the scanner direction
     dot_product = np.einsum('ij,ij->i', normals, -normals_xyz)
