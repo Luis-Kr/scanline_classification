@@ -183,83 +183,130 @@ def calculate_slope(scanline: np.ndarray,
     return np.abs(slope)
 
 
+# @njit()
+# def calculate_curvature_old(slope: np.ndarray) -> np.ndarray:
+#     """
+#     Calculates the curvature of a scanline based on its slope.
+
+#     Parameters:
+#     slope (np.ndarray): An array of the slopes of the scanline.
+
+#     Returns:
+#     np.ndarray: An array of the curvatures of the scanline. The first and last values are set to NaN.
+#     """
+    
+#     # Calculate the difference between adjacent slopes
+#     slope_diff = np.roll(slope, -1) - np.roll(slope, 1)
+    
+#     # Calculate the curvature as the absolute value of the slope difference
+#     curvature = np.abs(slope_diff)
+
+#     # Set the first and last values of the curvature to NaN, as they are not correct due to the roll operation
+#     curvature[0] = np.nan
+#     curvature[-1] = np.nan
+
+#     return curvature
+
+
 @njit()
-def calculate_curvature(slope: np.ndarray) -> np.ndarray:
+def pad_reflect(arr: np.ndarray, 
+                pad_width: int) -> np.ndarray:
     """
-    Calculates the curvature of a scanline based on its slope.
-
+    Function to pad an array using the 'reflect' mode (numpy.pad replacement). 
+    
     Parameters:
-    slope (np.ndarray): An array of the slopes of the scanline.
-
+    arr (np.ndarray): The input array to be padded.
+    pad_width (int): The number of elements by which to pad the array.
+    
     Returns:
-    np.ndarray: An array of the curvatures of the scanline. The first and last values are set to NaN.
+    np.ndarray: The padded array.
     """
-    
-    # Calculate the difference between adjacent slopes
-    slope_diff = np.roll(slope, -1) - np.roll(slope, 1)
-    
-    # Calculate the curvature as the absolute value of the slope difference
-    curvature = np.abs(slope_diff)
+    return np.concatenate((arr[pad_width:0:-1], arr, arr[-2:-pad_width-2:-1]))
 
-    # Set the first and last values of the curvature to NaN, as they are not correct due to the roll operation
-    curvature[0] = np.nan
-    curvature[-1] = np.nan
+
+@njit()
+def calculate_curvature(arr: np.ndarray, 
+                        num_neighbors: np.ndarray) -> np.ndarray:
+    """
+    Function to calculate the curvature between elements in an array and their neighbors.
+    
+    Parameters:
+    arr (np.ndarray): The input array.
+    num_neighbors (np.ndarray): The number of neighbors to consider on each side for each element in arr.
+    
+    Returns:
+    np.ndarray: An array of the calculated differences.
+    """
+    # Calculate the maximum number of neighbors to consider
+    num_max_neighbors = np.max(num_neighbors)
+    
+    # Pad the array at the beginning and end
+    pad_arr = pad_reflect(arr, num_max_neighbors)
+
+    # Initialize an empty array to store the differences
+    curvature = np.zeros(arr.shape[0])
+    
+    # Loop over each point in the original array
+    for idx in prange(arr.shape[0]):
+        i = idx + num_max_neighbors
+        # Calculate the differences
+        curvature[idx] = np.mean(np.abs(pad_arr[i+1:i+num_neighbors[idx]+1] - pad_arr[i-num_neighbors[idx]:i][::-1]))
 
     return curvature
 
 
-@njit()
-def orient_cross_product(vector_ba: np.ndarray, 
-                         vector_bc: np.ndarray, 
-                         viewpoint: np.ndarray) -> np.ndarray:
-    """
-    Orient the cross product (normal) of two vectors towards a viewpoint.
+# @njit()
+# def orient_cross_product(vector_ba: np.ndarray, 
+#                          vector_bc: np.ndarray, 
+#                          viewpoint: np.ndarray) -> np.ndarray:
+#     """
+#     Orient the cross product (normal) of two vectors towards a viewpoint.
 
-    Parameters:
-    vector_ba (np.ndarray): The first vector.
-    vector_bc (np.ndarray): The second vector.
-    viewpoint (np.ndarray): The viewpoint.
+#     Parameters:
+#     vector_ba (np.ndarray): The first vector.
+#     vector_bc (np.ndarray): The second vector.
+#     viewpoint (np.ndarray): The viewpoint.
 
-    Returns:
-    np.ndarray: The oriented cross product of the two vectors.
-    """
-    # Calculate the cross product of the two vectors
-    cross_product = np.cross(vector_ba, vector_bc)
+#     Returns:
+#     np.ndarray: The oriented cross product of the two vectors.
+#     """
+#     # Calculate the cross product of the two vectors
+#     cross_product = np.cross(vector_ba, vector_bc)
     
-    # Calculate the vector from the cross product to the viewpoint
-    vector_to_viewpoint = viewpoint - cross_product
+#     # Calculate the vector from the cross product to the viewpoint
+#     vector_to_viewpoint = viewpoint - cross_product
     
-    # If the cross product is not oriented towards the viewpoint, flip it
-    if np.dot(cross_product, vector_to_viewpoint) < 0:
-        cross_product = np.cross(vector_bc, vector_ba)
+#     # If the cross product is not oriented towards the viewpoint, flip it
+#     if np.dot(cross_product, vector_to_viewpoint) < 0:
+#         cross_product = np.cross(vector_bc, vector_ba)
     
-    return cross_product
+#     return cross_product
 
 
-@njit()
-def compute_normals(pcd_scanline, scanner_pos, x_col, y_col, z_col):
-    normals = np.zeros((pcd_scanline.shape[0], 3))
+# @njit()
+# def compute_normals(pcd_scanline, scanner_pos, x_col, y_col, z_col):
+#     normals = np.zeros((pcd_scanline.shape[0], 3))
     
-    pcd_x = pcd_scanline[:, x_col]
-    pcd_y = pcd_scanline[:, y_col]
-    pcd_z = pcd_scanline[:, z_col]
-    pcd_scanline_xyz = np.column_stack((pcd_x, pcd_y, pcd_z))
+#     pcd_x = pcd_scanline[:, x_col]
+#     pcd_y = pcd_scanline[:, y_col]
+#     pcd_z = pcd_scanline[:, z_col]
+#     pcd_scanline_xyz = np.column_stack((pcd_x, pcd_y, pcd_z))
     
-    for i in prange(pcd_scanline_xyz.shape[0]):
-        if i == 0:
-            #normal = np.cross(pcd_scanline_xyz[i+1], pcd_scanline_xyz[i])
-            normal = orient_cross_product(pcd_scanline_xyz[i+1], pcd_scanline_xyz[i], scanner_pos)
-            normals[i] = ( normal / np.linalg.norm(normal) ) / 1
-        elif i <= pcd_scanline_xyz.shape[0]-2:
-            #normal = np.cross(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i+1])
-            normal = orient_cross_product(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i+1], scanner_pos)
-            normals[i] = (normal / np.linalg.norm(normal)) / 1
-        else:
-            #normal = np.cross(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i])
-            normal = orient_cross_product(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i], scanner_pos)
-            normals[i] = (normal / np.linalg.norm(normal)) / 1
+#     for i in prange(pcd_scanline_xyz.shape[0]):
+#         if i == 0:
+#             #normal = np.cross(pcd_scanline_xyz[i+1], pcd_scanline_xyz[i])
+#             normal = orient_cross_product(pcd_scanline_xyz[i+1], pcd_scanline_xyz[i], scanner_pos)
+#             normals[i] = ( normal / np.linalg.norm(normal) ) / 1
+#         elif i <= pcd_scanline_xyz.shape[0]-2:
+#             #normal = np.cross(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i+1])
+#             normal = orient_cross_product(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i+1], scanner_pos)
+#             normals[i] = (normal / np.linalg.norm(normal)) / 1
+#         else:
+#             #normal = np.cross(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i])
+#             normal = orient_cross_product(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i], scanner_pos)
+#             normals[i] = (normal / np.linalg.norm(normal)) / 1
 
-    return normals
+#     return normals
 
 
 
@@ -269,6 +316,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                    y_col: int,
                                    z_col: int,
                                    scanline_id_col: int,
+                                   expected_value_col: int,
                                    rho_col: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Calculates the segmentation metrics (rho_diff, slope and curvature) for each scanline.
@@ -296,12 +344,24 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     # Calculate the segmentation metrics for each scanline
     for i in prange(scanline_ids.shape[0]):
         # Extract the current scanline and its indices in the pcd
-        scanline, scanline_indices = get_scanline(pcd, col=scanline_id_col, id=scanline_ids[i])
+        scanline, scanline_indices = get_scanline(pcd, 
+                                                  col=scanline_id_col, 
+                                                  id=scanline_ids[i])
+        
+        density = 1 / scanline[:, expected_value_col]
+        k_neighbors = np.ceil(np.sqrt(density*4))
         
         # Calculate the rho_diff, slope, and curvature for the current scanline
-        rho_diff_i = calculate_rho_diff(scanline, col=rho_col)
-        slope_i = calculate_slope(scanline, x_col=x_col, y_col=y_col, z_col=z_col)
-        curvature_i = calculate_curvature(slope_i)
+        rho_diff_i = calculate_rho_diff(scanline, 
+                                        col=rho_col)
+        
+        slope_i = calculate_slope(scanline, 
+                                  x_col=x_col, 
+                                  y_col=y_col, 
+                                  z_col=z_col)
+        
+        curvature_i = calculate_curvature(arr=slope_i, 
+                                          num_neighbors=k_neighbors)
         
         # Store the calculated metrics in the corresponding arrays
         for j in prange(scanline.shape[0]):
@@ -343,8 +403,7 @@ def scanline_segmentation(pcd: np.ndarray,
     
     # Identify the segments based on the conditions
     segments = np.where((pcd[:,rho_diff_col] > pcd[:,expected_value_col]*expected_value_factor) | 
-                        (pcd[:,slope_col] < slope_threshold) |
-                        (pcd[:,curvature_col] > curvature_threshold))[0]
+                        (pcd[:,curvature_col] > curvature_threshold))[0] #(pcd[:,slope_col] < slope_threshold) |
     
     # Assign the segment ids to the points
     for i in prange(pcd.shape[0]):
