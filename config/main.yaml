@@ -19,13 +19,14 @@ pcd_col:
   rho_diff: 12
   slope: 13
   curvature: 14
-  segment_ids: 15
-  nx_xyz: 16
-  ny_xyz: 17
-  nz_xyz: 18
-  nx: 19
-  ny: 20
-  nz: 21
+  roughness: 15
+  segment_ids: 16
+  nx_xyz: 17
+  ny_xyz: 18
+  nz_xyz: 19
+  nx: 20
+  ny: 21
+  nz: 22
 
 sce:
   threshold: 100
@@ -39,14 +40,14 @@ scs:
   expected_value_factor: 50
   slope_threshold: 0.25
   curvature_threshold: 30
-  fmt_normals:  "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %1.6f %u %1.6f %1.6f %1.6f %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
-  fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %1.6f %u %1.6f %1.6f %1.6f %u %1.4f %1.4f %1.4f"
+  fmt_normals:  "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %1.6f %u %1.6f %1.6f %1.6f %1.6f %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
+  fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %1.6f %u %1.6f %1.6f %1.6f %1.6f %u %1.4f %1.4f %1.4f"
   save_pcd: True
 
 scsb:
   fmt_normals:  "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
   fmt: "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
-  save_pcd: True
+  save_pcd: False
 
 
 

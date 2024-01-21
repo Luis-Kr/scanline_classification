@@ -91,25 +91,25 @@ def scanline_segmentation(cfg: DictConfig,
                           logger: logging.Logger, 
                           normals_xyz: np.ndarray, 
                           normals: np.ndarray):    
-    logger.info('Calculating the segmentation metrics rho_diff, slope, curvature and normals...')
+    logger.info('Calculating the segmentation metrics rho_diff, slope, curvature, roughness and normals...')
     
     # Sort the pcd by the vertical angle
     pcd_sorted, sort_indices = scs.sort_scanline(pcd, col=cfg.pcd_col.vert_angle)
     
-    rho_diff, slope, curvature = scs.calculate_segmentation_metrics(pcd=pcd_sorted, 
-                                                                    x_col=cfg.pcd_col.x,
-                                                                    y_col=cfg.pcd_col.y,
-                                                                    z_col=cfg.pcd_col.z,
-                                                                    scanline_id_col=cfg.pcd_col.scanline_id,
-                                                                    expected_value_col=cfg.pcd_col.expected_value,
-                                                                    rho_col=cfg.pcd_col.rho)
+    rho_diff, slope, curvature, roughness = scs.calculate_segmentation_metrics(pcd=pcd_sorted, 
+                                                                               x_col=cfg.pcd_col.x,
+                                                                               y_col=cfg.pcd_col.y,
+                                                                               z_col=cfg.pcd_col.z,
+                                                                               scanline_id_col=cfg.pcd_col.scanline_id,
+                                                                               expected_value_col=cfg.pcd_col.expected_value,
+                                                                               rho_col=cfg.pcd_col.rho)
     
     # Add the segmentation metrics to the point cloud data
     logger.info('Sorting the PCD...')
     if not cfg.sce.calculate_normals:
-        pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, normals_xyz[sort_indices]]
+        pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, roughness, normals_xyz[sort_indices]]
     else:
-        pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, normals_xyz[sort_indices], normals[sort_indices]]
+        pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, roughness, normals_xyz[sort_indices], normals[sort_indices]]
         
     pcd_sorted = pcd_sorted[np.lexsort(np.rot90(pcd_sorted[:,(cfg.pcd_col.scanline_id,
                                                               cfg.pcd_col.vert_angle)]))]
