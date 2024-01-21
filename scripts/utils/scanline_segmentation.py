@@ -343,6 +343,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
 
     # Calculate the segmentation metrics for each scanline
     for i in prange(scanline_ids.shape[0]):
+        #print(f'Calculating segmentation metrics for scanline {i+1}/{scanline_ids.shape[0]}')
         # Extract the current scanline and its indices in the pcd
         scanline, scanline_indices = get_scanline(pcd, 
                                                   col=scanline_id_col, 
