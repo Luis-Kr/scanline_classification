@@ -39,6 +39,10 @@ def process_files(input_dir: str,
 
 
 if __name__ == "__main__":
-    input_dir = "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/01_raw/SiteB_Scans_Global_I_RGB_RHV"
-    output_dir = "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/02_number_of_points_counter/SiteB_Scans_Global_I_RGB_RHV"
+    # Define the input and output directories
+    root_dir = Path(__file__).parent.parent.parent
+    input_dir = root_dir / "data/01_raw/SiteB_Scans_Global_I_RGB_RHV"
+    output_dir = root_dir / "data/02_number_of_points_counter/SiteB_Scans_Global_I_RGB_RHV"
+    
+    # Process the files
     process_files(input_dir, output_dir)
