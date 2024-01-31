@@ -263,15 +263,16 @@ def calculate_distances_point_lines(center_point: np.ndarray,
     vec_p1_p0 = center_point - points_left_side
     distance = np.zeros(vec_p1_p0.shape[0])
     
-    for i in range(vec_p1_p0.shape[0]):
-        dot_product = np.dot(a[i], a[i])
-        if dot_product != 0:
-            t = np.dot(vec_p1_p0[i], a[i]) / dot_product
-            l1 = points_left_side[i] + t*a[i]
-            distance[i] = np.linalg.norm(l1 - center_point)
+    for v in range(vec_p1_p0.shape[0]):
+        dproduct_direction_vector = np.dot(a[v], a[v])
+        if dproduct_direction_vector != 0:
+            t = np.dot(vec_p1_p0[v], a[v]) / dproduct_direction_vector
+            l1 = points_left_side[v] + t*a[v]
+            distance[v] = np.linalg.norm(l1 - center_point)
         else:
             # ZeroDivisionError occurs because points are too close together (identical points) 
-            distance[i] = 0
+            #print('ZeroDivisionError')
+            distance[v] = 0
             
     return distance
 
@@ -303,17 +304,17 @@ def calculate_roughness(scanline: np.ndarray,
     # Calculate the maximum number of neighbors to consider
     num_max_neighbors = int(np.max(num_neighbors))  
     
-    # Manually pad the scanline at the beginning and end
-    padded_scanline = np.concatenate((scanline_xyz[num_max_neighbors:0:-1], scanline_xyz, scanline_xyz[-2:-num_max_neighbors-2:-1]))
+    # Pad the array at the beginning and end
+    padded_scanline = pad_reflect(scanline_xyz, num_max_neighbors)
     
     # Calculate the roughness
-    roughness = np.zeros(padded_scanline.shape[0])
-    for idx in range(padded_scanline.shape[0]):
-        i = int(idx + num_max_neighbors)
-        roughness[idx] = np.nanmean(calculate_distances_point_lines(center_point=padded_scanline[i], 
-                                                                    points_left_side=padded_scanline[i-num_neighbors[idx]:i], 
-                                                                    points_right_side=padded_scanline[i+1:i+num_neighbors[idx]+1]))
-        
+    roughness = np.zeros(scanline.shape[0])
+    for idx in range(scanline.shape[0]):
+        n = int(idx + num_max_neighbors)
+        roughness[idx] = np.mean(calculate_distances_point_lines(center_point=padded_scanline[n], 
+                                                                 points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
+                                                                 points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
+    
     return roughness
 
 
@@ -403,23 +404,24 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     slope = np.zeros(pcd.shape[0])
     curvature = np.zeros(pcd.shape[0])
     roughness = np.zeros(pcd.shape[0])
-
-    print(f'Number of scanlines: {scanline_ids.shape[0]}')
-    print(f'Number of points: {pcd.shape[0]}')
     
     # Calculate the segmentation metrics for each scanline
     for i in prange(scanline_ids.shape[0]):
-        print(int(scanline_ids[i]))
         # Extract the current scanline and its indices in the pcd
         scanline, scanline_indices = get_scanline(pcd, 
                                                   col=scanline_id_col, 
                                                   id=int(scanline_ids[i]))
         
-        print(f'Number of points in scanline: {scanline.shape[0]}')
-        print(f'Number of points in scanline indices: {scanline_indices.shape[0]}')
-        
         density = 1 / scanline[:, expected_value_col]
-        k_neighbors = np.ceil(np.sqrt(density*4))
+        
+        # Smoothing case
+        k_neighbors = np.ceil(np.sqrt(density))
+        
+        # Smoothing with constant k
+        #k_neighbors = np.ones(scanline.shape[0]) * 10
+        
+        # No smoothing case
+        #k_neighbors = np.ones(scanline.shape[0])
         
         # Calculate the rho_diff, slope, and curvature for the current scanline
         rho_diff_i = calculate_rho_diff(scanline, 
