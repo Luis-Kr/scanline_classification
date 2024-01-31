@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple
-from numba import njit, prange
-
+from numba import njit, prange, float64, int64
+from numba.typed import Dict
 
 @njit()
 def segment_subsampling(pcd: np.ndarray, 
@@ -43,8 +43,8 @@ def segment_subsampling(pcd: np.ndarray,
     # Calculate the median, min, and max of the xyz coordinates
     for i in prange(xyz_segment.shape[1]):
         xyz_segment_median[0,i] = np.median(xyz_segment[:, i])
-        xyz_segment_min[0,i] = np.min(xyz_segment[:, i])
-        xyz_segment_max[0,i] = np.max(xyz_segment[:, i])    
+        xyz_segment_min[0,i] = np.nanpercentile(xyz_segment[:, i], 2)
+        xyz_segment_max[0,i] = np.nanpercentile(xyz_segment[:, i], 98)    
 
     # KdTree didn't work with numba, so use Euclidean distance instead
     # Calculate the Euclidean distance from each point to the median, min, and max point
@@ -67,6 +67,20 @@ def segment_subsampling(pcd: np.ndarray,
 
 
 @njit()
+def count_labels(labels_segment):
+    unique_labels = np.unique(labels_segment)
+    max_count = 0
+    max_label = -1
+    for i in prange(unique_labels.shape[0]):
+        label = unique_labels[i]
+        count = np.sum(labels_segment == label)
+        if count > max_count:
+            max_count = count
+            max_label = label
+    return max_label
+
+
+@njit()
 def calculate_segment_attributes(pcd: np.ndarray, 
                                  segment_indices: np.ndarray,
                                  height_col: int,
@@ -75,8 +89,10 @@ def calculate_segment_attributes(pcd: np.ndarray,
                                  green_col: int,
                                  blue_col: int,
                                  rho_col: int,
+                                 label_col: int,
                                  slope_col: int,
                                  curvature_col: int,
+                                 roughness_col: int,
                                  normals_xyz_col: np.ndarray,
                                  normals_col: np.ndarray) -> np.ndarray:
     """
@@ -104,7 +120,7 @@ def calculate_segment_attributes(pcd: np.ndarray,
     np.ndarray: A 1D array containing the calculated attributes for the segment.
     """
     # Create an empty dictionary to store the attributes
-    segment_attributes = np.zeros((1, 90))
+    segment_attributes = np.zeros((1, 97))
     
     # Extract the relevant columns for the segment
     height_segment = pcd[segment_indices, height_col]
@@ -113,8 +129,10 @@ def calculate_segment_attributes(pcd: np.ndarray,
     green_segment = pcd[segment_indices, green_col]
     blue_segment = pcd[segment_indices, blue_col]
     rho_segment = pcd[segment_indices, rho_col]
+    labels_segment = pcd[segment_indices, label_col]
     slope_segment = pcd[segment_indices, slope_col]
     curvature_segment = pcd[segment_indices, curvature_col]
+    roughness_segment = pcd[segment_indices, roughness_col]
     nx_xyz = pcd[segment_indices, normals_xyz_col[0]]
     ny_xyz = pcd[segment_indices, normals_xyz_col[1]]
     nz_xyz = pcd[segment_indices, normals_xyz_col[2]]
@@ -127,22 +145,22 @@ def calculate_segment_attributes(pcd: np.ndarray,
     segment_attributes[0, 1] = np.nanvar(height_segment)
     segment_attributes[0, 2] = np.nanstd(height_segment)
     segment_attributes[0, 3] = np.nanmedian(height_segment)
-    segment_attributes[0, 4] = np.nanmin(height_segment)
-    segment_attributes[0, 5] = np.nanmax(height_segment)
+    segment_attributes[0, 4] = np.nanpercentile(height_segment, 2)
+    segment_attributes[0, 5] = np.nanpercentile(height_segment, 98)
 
     segment_attributes[0, 6] = np.nanmean(reflectance_segment)
     segment_attributes[0, 7] = np.nanvar(reflectance_segment)
     segment_attributes[0, 8] = np.nanstd(reflectance_segment)
     segment_attributes[0, 9] = np.nanmedian(reflectance_segment)
-    segment_attributes[0, 10] = np.nanmin(reflectance_segment)
-    segment_attributes[0, 11] = np.nanmax(reflectance_segment)
+    segment_attributes[0, 10] = np.nanpercentile(reflectance_segment, 2)
+    segment_attributes[0, 11] = np.nanpercentile(reflectance_segment, 98)
 
     segment_attributes[0, 12] = np.nanmean(red_segment)
     segment_attributes[0, 13] = np.nanvar(red_segment)
     segment_attributes[0, 14] = np.nanstd(red_segment)
     segment_attributes[0, 15] = np.nanmedian(red_segment)
-    segment_attributes[0, 16] = np.nanmin(red_segment)
-    segment_attributes[0, 17] = np.nanmax(red_segment)
+    segment_attributes[0, 16] = np.nanpercentile(red_segment, 2)
+    segment_attributes[0, 17] = np.nanpercentile(red_segment, 98)
 
     segment_attributes[0, 18] = np.nanmean(green_segment)
     segment_attributes[0, 19] = np.nanvar(green_segment)
@@ -155,77 +173,89 @@ def calculate_segment_attributes(pcd: np.ndarray,
     segment_attributes[0, 25] = np.nanvar(blue_segment)
     segment_attributes[0, 26] = np.nanstd(blue_segment)
     segment_attributes[0, 27] = np.nanmedian(blue_segment)
-    segment_attributes[0, 28] = np.nanmin(blue_segment)
-    segment_attributes[0, 29] = np.nanmax(blue_segment)
+    segment_attributes[0, 28] = np.nanpercentile(blue_segment, 2)
+    segment_attributes[0, 29] = np.nanpercentile(blue_segment, 98)
 
     segment_attributes[0, 30] = np.nanmean(rho_segment)
     segment_attributes[0, 31] = np.nanvar(rho_segment)
     segment_attributes[0, 32] = np.nanstd(rho_segment)
     segment_attributes[0, 33] = np.nanmedian(rho_segment)
-    segment_attributes[0, 34] = np.nanmin(rho_segment)
-    segment_attributes[0, 35] = np.nanmax(rho_segment)
+    segment_attributes[0, 34] = np.nanpercentile(rho_segment, 2)
+    segment_attributes[0, 35] = np.nanpercentile(rho_segment, 98)
 
     segment_attributes[0, 36] = np.nanmean(slope_segment)
     segment_attributes[0, 37] = np.nanvar(slope_segment)
     segment_attributes[0, 38] = np.nanstd(slope_segment)
     segment_attributes[0, 39] = np.nanmedian(slope_segment)
-    segment_attributes[0, 40] = np.nanmin(slope_segment)
-    segment_attributes[0, 41] = np.nanmax(slope_segment)
+    segment_attributes[0, 40] = np.nanpercentile(slope_segment, 2)
+    segment_attributes[0, 41] = np.nanpercentile(slope_segment, 98)
 
     segment_attributes[0, 42] = np.nanmean(curvature_segment)
     segment_attributes[0, 43] = np.nanvar(curvature_segment)
     segment_attributes[0, 44] = np.nanstd(curvature_segment)
     segment_attributes[0, 45] = np.nanmedian(curvature_segment)
-    segment_attributes[0, 46] = np.nanmin(curvature_segment)
-    segment_attributes[0, 47] = np.nanmax(curvature_segment)
+    segment_attributes[0, 46] = np.nanpercentile(curvature_segment, 2)
+    segment_attributes[0, 47] = np.nanpercentile(curvature_segment, 98)
     
-    segment_attributes[0, 48] = np.nanmean(nx_xyz)
-    segment_attributes[0, 49] = np.nanvar(nx_xyz)
-    segment_attributes[0, 50] = np.nanstd(nx_xyz)
-    segment_attributes[0, 51] = np.nanmedian(nx_xyz)
-    segment_attributes[0, 52] = np.nanmin(nx_xyz)
-    segment_attributes[0, 53] = np.nanmax(nx_xyz)
-    segment_attributes[0, 54] = np.ptp(nx_xyz)
+    segment_attributes[0, 48] = np.nanmean(roughness_segment)
+    segment_attributes[0, 49] = np.nanvar(roughness_segment)
+    segment_attributes[0, 50] = np.nanstd(roughness_segment)
+    segment_attributes[0, 51] = np.nanmedian(roughness_segment)
+    segment_attributes[0, 52] = np.nanpercentile(roughness_segment, 2)
+    segment_attributes[0, 53] = np.nanpercentile(roughness_segment, 98)
     
-    segment_attributes[0, 55] = np.nanmean(ny_xyz)
-    segment_attributes[0, 56] = np.nanvar(ny_xyz)
-    segment_attributes[0, 57] = np.nanstd(ny_xyz)
-    segment_attributes[0, 58] = np.nanmedian(ny_xyz)
-    segment_attributes[0, 59] = np.nanmin(ny_xyz)
-    segment_attributes[0, 60] = np.nanmax(ny_xyz)
-    segment_attributes[0, 61] = np.ptp(ny_xyz)
+    segment_attributes[0, 54] = np.nanmean(nx_xyz)
+    segment_attributes[0, 55] = np.nanvar(nx_xyz)
+    segment_attributes[0, 56] = np.nanstd(nx_xyz)
+    segment_attributes[0, 57] = np.nanmedian(nx_xyz)
+    segment_attributes[0, 58] = np.nanpercentile(nx_xyz, 2)
+    segment_attributes[0, 59] = np.nanpercentile(nx_xyz, 98)
+    segment_attributes[0, 60] = np.ptp(nx_xyz)
     
-    segment_attributes[0, 62] = np.nanmean(nz_xyz)
-    segment_attributes[0, 63] = np.nanvar(nz_xyz)
-    segment_attributes[0, 64] = np.nanstd(nz_xyz)
-    segment_attributes[0, 65] = np.nanmedian(nz_xyz)
-    segment_attributes[0, 66] = np.nanmin(nz_xyz)
-    segment_attributes[0, 67] = np.nanmax(nz_xyz)
-    segment_attributes[0, 68] = np.ptp(nz_xyz)
+    segment_attributes[0, 61] = np.nanmean(ny_xyz)
+    segment_attributes[0, 62] = np.nanvar(ny_xyz)
+    segment_attributes[0, 63] = np.nanstd(ny_xyz)
+    segment_attributes[0, 64] = np.nanmedian(ny_xyz)
+    segment_attributes[0, 65] = np.nanpercentile(ny_xyz, 2)
+    segment_attributes[0, 66] = np.nanpercentile(ny_xyz, 98)
+    segment_attributes[0, 67] = np.ptp(ny_xyz)
     
-    segment_attributes[0, 69] = np.nanmean(nx)
-    segment_attributes[0, 70] = np.nanvar(nx)
-    segment_attributes[0, 71] = np.nanstd(nx)
-    segment_attributes[0, 72] = np.nanmedian(nx)
-    segment_attributes[0, 73] = np.nanmin(nx)
-    segment_attributes[0, 74] = np.nanmax(nx)
-    segment_attributes[0, 75] = np.ptp(nx)
+    segment_attributes[0, 68] = np.nanmean(nz_xyz)
+    segment_attributes[0, 69] = np.nanvar(nz_xyz)
+    segment_attributes[0, 70] = np.nanstd(nz_xyz)
+    segment_attributes[0, 71] = np.nanmedian(nz_xyz)
+    segment_attributes[0, 72] = np.nanpercentile(nz_xyz, 2)
+    segment_attributes[0, 73] = np.nanpercentile(nz_xyz, 98)
+    segment_attributes[0, 74] = np.ptp(nz_xyz)
     
-    segment_attributes[0, 76] = np.nanmean(ny)
-    segment_attributes[0, 77] = np.nanvar(ny)
-    segment_attributes[0, 78] = np.nanstd(ny)
-    segment_attributes[0, 79] = np.nanmedian(ny)
-    segment_attributes[0, 80] = np.nanmin(ny)
-    segment_attributes[0, 81] = np.nanmax(ny)
-    segment_attributes[0, 82] = np.ptp(ny)
+    segment_attributes[0, 75] = np.nanmean(nx)
+    segment_attributes[0, 76] = np.nanvar(nx)
+    segment_attributes[0, 77] = np.nanstd(nx)
+    segment_attributes[0, 78] = np.nanmedian(nx)
+    segment_attributes[0, 79] = np.nanpercentile(nx, 2)
+    segment_attributes[0, 80] = np.nanpercentile(nx, 98)
+    segment_attributes[0, 81] = np.ptp(nx)
     
-    segment_attributes[0, 83] = np.nanmean(nz)
-    segment_attributes[0, 84] = np.nanvar(nz)
-    segment_attributes[0, 85] = np.nanstd(nz)
-    segment_attributes[0, 86] = np.nanmedian(nz)
-    segment_attributes[0, 87] = np.nanmin(nz)
-    segment_attributes[0, 88] = np.nanmax(nz)
-    segment_attributes[0, 89] = np.ptp(nz)
+    segment_attributes[0, 82] = np.nanmean(ny)
+    segment_attributes[0, 83] = np.nanvar(ny)
+    segment_attributes[0, 84] = np.nanstd(ny)
+    segment_attributes[0, 85] = np.nanmedian(ny)
+    segment_attributes[0, 86] = np.nanpercentile(ny, 2)
+    segment_attributes[0, 87] = np.nanpercentile(ny, 98)
+    segment_attributes[0, 88] = np.ptp(ny)
+    
+    segment_attributes[0, 89] = np.nanmean(nz)
+    segment_attributes[0, 90] = np.nanvar(nz)
+    segment_attributes[0, 91] = np.nanstd(nz)
+    segment_attributes[0, 92] = np.nanmedian(nz)
+    segment_attributes[0, 93] = np.nanpercentile(nz, 2)
+    segment_attributes[0, 94] = np.nanpercentile(nz, 98)
+    segment_attributes[0, 95] = np.ptp(nz)
+    
+    # labels_unique, labels_counts = np.unique(labels_segment, return_counts=True)
+    # segment_attributes[0, 96] = labels_unique[np.argmax(labels_counts)]
+    
+    segment_attributes[0, 96] = count_labels(labels_segment)
 
     return segment_attributes
 
@@ -258,20 +288,22 @@ def process_segments(pcd: np.ndarray,
                      segment_classes: np.ndarray, 
                      processed_segments: np.ndarray,
                      counts: np.ndarray,
-                     x_col: int=0,
-                     y_col: int=1,
-                     z_col: int=2,
-                     height_col: int=2,
-                     intensity_col: int=3,
-                     red_col: int=4,
-                     green_col: int=5,
-                     blue_col: int=6,
-                     rho_col: int=7,
-                     slope_col: int=13,
-                     curvature_col: int=14,
-                     segment_ids_col: int=15,
-                     normals_xyz_col: np.ndarray=np.array([16,17,18]),
-                     normals_col: np.ndarray=np.array([19,20,21])) -> np.ndarray:
+                     x_col: int,
+                     y_col: int,
+                     z_col: int,
+                     height_col: int,
+                     intensity_col: int,
+                     red_col: int,
+                     green_col: int,
+                     blue_col: int,
+                     rho_col: int,
+                     label_col: int,
+                     slope_col: int,
+                     curvature_col: int,
+                     roughness_col: int,
+                     segment_ids_col: int,
+                     normals_xyz_col: np.ndarray,
+                     normals_col: np.ndarray) -> np.ndarray:
     """
     Subsample each segment in a point cloud array and calculate the segment attributes.
 
@@ -280,20 +312,20 @@ def process_segments(pcd: np.ndarray,
     segment_classes (np.ndarray): An array containing the class of each segment.
     processed_segments (np.ndarray): An array to store the processed segments.
     counts (np.ndarray): An array containing the count of points in each segment.
-    x_col (int, optional): The index of the x column in the pcd. Defaults to 0.
-    y_col (int, optional): The index of the y column. Defaults to 1.
-    z_col (int, optional): The index of the z column. Defaults to 2.
-    height_col (int, optional): The index of the height column. Defaults to 2.
-    reflectance_col (int, optional): The index of the reflectance column. Defaults to 3.
-    red_col (int, optional): The index of the red color column. Defaults to 4.
-    green_col (int, optional): The index of the green color column. Defaults to 5.
-    blue_col (int, optional): The index of the blue color column. Defaults to 6.
-    rho_col (int, optional): The index of the rho column. Defaults to 7.
-    slope_col (int, optional): The index of the slope column. Defaults to 13.
-    curvature_col (int, optional): The index of the curvature column. Defaults to 14.
-    segment_ids_col (int, optional): The index of the segment ids column. Defaults to 15.
-    normals_xyz_col (list, optional): The indices of the xyz columns of the normals. Defaults to [16,17,18].
-    normals_col (list, optional): The indices of the normals. Defaults to [19,20,21].
+    x_col (int, optional): The index of the x column in the pcd. 
+    y_col (int, optional): The index of the y column.
+    z_col (int, optional): The index of the z column. 
+    height_col (int, optional): The index of the height column.
+    reflectance_col (int, optional): The index of the reflectance column. 
+    red_col (int, optional): The index of the red color column. 
+    green_col (int, optional): The index of the green color column.
+    blue_col (int, optional): The index of the blue color column. 
+    rho_col (int, optional): The index of the rho column. 
+    slope_col (int, optional): The index of the slope column.
+    curvature_col (int, optional): The index of the curvature column.
+    segment_ids_col (int, optional): The index of the segment ids column. 
+    normals_xyz_col (list, optional): The indices of the xyz columns of the normals.
+    normals_col (list, optional): The indices of the normals.
 
 
     Returns:
@@ -326,8 +358,10 @@ def process_segments(pcd: np.ndarray,
                                                           green_col=green_col,
                                                           blue_col=blue_col,
                                                           rho_col=rho_col,
+                                                          label_col=label_col,
                                                           slope_col=slope_col,
                                                           curvature_col=curvature_col,
+                                                          roughness_col=roughness_col,
                                                           normals_xyz_col=normals_xyz_col,
                                                           normals_col=normals_col)
         

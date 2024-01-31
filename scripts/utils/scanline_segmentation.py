@@ -238,7 +238,7 @@ def calculate_curvature(arr: np.ndarray,
     np.ndarray: An array of the calculated differences.
     """
     # Calculate the maximum number of neighbors to consider
-    num_max_neighbors = np.max(num_neighbors)
+    num_max_neighbors = int(np.max(num_neighbors))
     
     # Pad the array at the beginning and end
     pad_arr = pad_reflect(arr, num_max_neighbors)
@@ -247,12 +247,75 @@ def calculate_curvature(arr: np.ndarray,
     curvature = np.zeros(arr.shape[0])
     
     # Loop over each point in the original array
-    for idx in prange(arr.shape[0]):
+    for idx in range(arr.shape[0]):
         i = idx + num_max_neighbors
         # Calculate the differences
         curvature[idx] = np.mean(np.abs(pad_arr[i+1:i+num_neighbors[idx]+1] - pad_arr[i-num_neighbors[idx]:i][::-1]))
 
     return curvature
+
+
+@njit()
+def calculate_distances_point_lines(center_point: np.ndarray, 
+                                    points_left_side: np.ndarray, 
+                                    points_right_side: np.ndarray) -> np.ndarray:
+    a = points_right_side - points_left_side
+    vec_p1_p0 = center_point - points_left_side
+    distance = np.zeros(vec_p1_p0.shape[0])
+    
+    for v in range(vec_p1_p0.shape[0]):
+        dproduct_direction_vector = np.dot(a[v], a[v])
+        if dproduct_direction_vector != 0:
+            t = np.dot(vec_p1_p0[v], a[v]) / dproduct_direction_vector
+            l1 = points_left_side[v] + t*a[v]
+            distance[v] = np.linalg.norm(l1 - center_point)
+        else:
+            # ZeroDivisionError occurs because points are too close together (identical points) 
+            #print('ZeroDivisionError')
+            distance[v] = 0
+            
+    return distance
+
+
+@njit()
+def calculate_roughness(scanline: np.ndarray,
+                        num_neighbors: np.ndarray,
+                        x_col: int,
+                        y_col: int,
+                        z_col: int) -> np.ndarray:
+    """
+    Function to calculate the roughness of a scanline with variable number of neighbors.
+    
+    Parameters:
+    scanline (np.ndarray): The input scanline.
+    num_neighbors (np.ndarray): The number of neighbors to consider on each side for each point in the scanline.
+    
+    Returns:
+    np.ndarray: An array of the calculated roughness.
+    """ 
+    # Extract the x, y, z coordinates from the scanline (numba does not support indexing with multiple columns)
+    x = scanline[:, x_col]
+    y = scanline[:, y_col]
+    z = scanline[:, z_col]
+    
+    # Merge the x, y, z coordinates into a single array
+    scanline_xyz = np.column_stack((x, y, z))
+    
+    # Calculate the maximum number of neighbors to consider
+    num_max_neighbors = int(np.max(num_neighbors))  
+    
+    # Pad the array at the beginning and end
+    padded_scanline = pad_reflect(scanline_xyz, num_max_neighbors)
+    
+    # Calculate the roughness
+    roughness = np.zeros(scanline.shape[0])
+    for idx in range(scanline.shape[0]):
+        n = int(idx + num_max_neighbors)
+        roughness[idx] = np.mean(calculate_distances_point_lines(center_point=padded_scanline[n], 
+                                                                 points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
+                                                                 points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
+    
+    return roughness
 
 
 # @njit()
@@ -340,17 +403,26 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     rho_diff = np.zeros(pcd.shape[0])
     slope = np.zeros(pcd.shape[0])
     curvature = np.zeros(pcd.shape[0])
-
+    roughness = np.zeros(pcd.shape[0])
+    
     # Calculate the segmentation metrics for each scanline
     for i in prange(scanline_ids.shape[0]):
         #print(f'Calculating segmentation metrics for scanline {i+1}/{scanline_ids.shape[0]}')
         # Extract the current scanline and its indices in the pcd
         scanline, scanline_indices = get_scanline(pcd, 
                                                   col=scanline_id_col, 
-                                                  id=scanline_ids[i])
+                                                  id=int(scanline_ids[i]))
         
         density = 1 / scanline[:, expected_value_col]
-        k_neighbors = np.ceil(np.sqrt(density*4))
+        
+        # Smoothing case
+        k_neighbors = np.ceil(np.sqrt(density))
+        
+        # Smoothing with constant k
+        #k_neighbors = np.ones(scanline.shape[0]) * 10
+        
+        # No smoothing case
+        #k_neighbors = np.ones(scanline.shape[0])
         
         # Calculate the rho_diff, slope, and curvature for the current scanline
         rho_diff_i = calculate_rho_diff(scanline, 
@@ -364,13 +436,20 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         curvature_i = calculate_curvature(arr=slope_i, 
                                           num_neighbors=k_neighbors)
         
+        roughness_i = calculate_roughness(scanline=scanline, 
+                                          num_neighbors=k_neighbors,
+                                          x_col=x_col,
+                                          y_col=y_col,
+                                          z_col=z_col)
+        
         # Store the calculated metrics in the corresponding arrays
         for j in prange(scanline.shape[0]):
             rho_diff[scanline_indices[j]] = rho_diff_i[j]
             slope[scanline_indices[j]] = slope_i[j]
             curvature[scanline_indices[j]] = curvature_i[j]
+            roughness[scanline_indices[j]] = roughness_i[j]
 
-    return rho_diff, slope, curvature
+    return rho_diff, slope, curvature, roughness
 
 
 @njit(parallel=True)
