@@ -311,9 +311,9 @@ def calculate_roughness(scanline: np.ndarray,
     roughness = np.zeros(scanline.shape[0])
     for idx in range(scanline.shape[0]):
         n = int(idx + num_max_neighbors)
-        roughness[idx] = np.mean(calculate_distances_point_lines(center_point=padded_scanline[n], 
-                                                                 points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
-                                                                 points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
+        roughness[idx] = np.nanvar(calculate_distances_point_lines(center_point=padded_scanline[n], 
+                                                                   points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
+                                                                   points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
     
     return roughness
 
@@ -417,6 +417,9 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         
         # Smoothing case
         k_neighbors = np.ceil(np.sqrt(density))
+        
+        # If k_neighbors is 1, set it to 2 to avoid too small neighborhoods
+        k_neighbors[k_neighbors == 1] = 2
         
         # Smoothing with constant k
         #k_neighbors = np.ones(scanline.shape[0]) * 10
