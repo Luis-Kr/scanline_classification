@@ -80,7 +80,7 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
     if cfg.sce.save_pcd:
         # Save the scanlines
         logger.info(f'Saving the scanlines: {Path(root_dir) / "data/raw_plus_scanline_extraction/SiteA_Scans_Global_I_RGB_RHV/Scan01_with_scanlineID.asc"}')
-        np.savetxt(Path(root_dir) / 'data/02_raw_plus_scanline_extraction/SiteA_Scans_Global_I_RGB_RHV/Scan01_with_scanlineID.asc', 
+        np.savetxt(Path(root_dir) / 'data/04_scanline_extraction/SiteA_Scans_Global_I_RGB_RHV/Scan01_with_scanlineID.asc', 
                    pcd, fmt=cfg.sce.fmt, delimiter=' ')
     
     return pcd, normals_xyz, normals
@@ -136,13 +136,17 @@ def scanline_segmentation(cfg: DictConfig,
     pcd_segmented = np.c_[pcd_sorted_left, segment_ids, pcd_sorted_right]
     
     if cfg.scs.save_pcd:
+        
+        segmentation_path = Path(*[part if part != '03_labeled' else '05_segmentation' for part in Path(cfg.pcd_path).parts])
+        segmentation_path = segmentation_path.with_stem(segmentation_path.stem + "_Segmentation")
+        
         if not cfg.sce.calculate_normals:
-            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / "data/raw_plus_scanline_plus_segmentation/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation.asc"}')
-            np.savetxt(Path(root_dir) / 'data/03_raw_plus_scanline_plus_segmentation/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation.asc', 
+            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
+            np.savetxt(Path(root_dir) / segmentation_path, 
                        pcd_segmented, fmt=cfg.scs.fmt, delimiter=' ')
         else:
-            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / "data/raw_plus_scanline_plus_segmentation/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation.asc"}')
-            np.savetxt(Path(root_dir) / 'data/03_raw_plus_scanline_plus_segmentation/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation_Normals.asc', 
+            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
+            np.savetxt(Path(root_dir) / segmentation_path, 
                     pcd_segmented, fmt=cfg.scs.fmt_normals, delimiter=' ')
     
     return pcd_segmented
@@ -156,7 +160,7 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
     segment_classes = np.array(list(set(pcd[:,cfg.pcd_col.segment_ids])))
     
     # Initialize the processed segments array
-    processed_segments = np.zeros((segment_classes.shape[0], 99))
+    processed_segments = np.zeros((segment_classes.shape[0], 106))
     
     # Get the number of points in each segment
     _, counts = np.unique(pcd[:,cfg.pcd_col.segment_ids], return_counts=True)
@@ -175,8 +179,10 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
                                                    green_col=cfg.pcd_col.green,
                                                    blue_col=cfg.pcd_col.blue,
                                                    rho_col=cfg.pcd_col.rho,
+                                                   label_col=cfg.pcd_col.label,
                                                    slope_col=cfg.pcd_col.slope,
                                                    curvature_col=cfg.pcd_col.curvature,
+                                                   roughness_col=cfg.pcd_col.roughness,
                                                    segment_ids_col=cfg.pcd_col.segment_ids,
                                                    normals_xyz_col=np.array([cfg.pcd_col.nx_xyz,
                                                                              cfg.pcd_col.ny_xyz,
@@ -187,16 +193,22 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
     
     if not cfg.sce.calculate_normals:
         # remove the last 21 values from the processed segments
-        pcd_processed_segments = pcd_processed_segments[:, :-21]
+        pcd_processed_segments = np.hstack((pcd_processed_segments[:, :-22],  pcd_processed_segments[:, -1:]))
     
     if cfg.scsb.save_pcd:
+        
+        segmentation_path = Path(*[part if part != '03_labeled' else '06_subsampling' for part in Path(cfg.pcd_path).parts])
+        segmentation_path = segmentation_path.with_stem(segmentation_path.stem + "_Subsampling")
+        
         if cfg.sce.calculate_normals:
-            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / "data/04_raw_plus_scanline_plus_segmentation_plus_subsampling/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation_Subsampling.asc"}')
-            np.savetxt(Path(root_dir) / "data/04_raw_plus_scanline_plus_segmentation_plus_subsampling/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation_Subsampling.asc", 
+            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
+            print(pcd_processed_segments.shape)
+            np.savetxt(Path(root_dir) / segmentation_path, 
                     pcd_processed_segments, fmt=cfg.scsb.fmt_normals, delimiter=' ')
         else:
-            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / "data/04_raw_plus_scanline_plus_segmentation_plus_subsampling/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation_Subsampling.asc"}')
-            np.savetxt(Path(root_dir) / "data/04_raw_plus_scanline_plus_segmentation_plus_subsampling/SiteA_Scans_Global_I_RGB_RHV/Scan01_ScanlineID_Segmentation_Subsampling.asc", 
+            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
+            print(pcd_processed_segments.shape)
+            np.savetxt(Path(root_dir) / segmentation_path, 
                     pcd_processed_segments, fmt=cfg.scsb.fmt, delimiter=' ')
 
 
