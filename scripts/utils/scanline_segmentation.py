@@ -1,7 +1,6 @@
 import numpy as np
 from typing import Tuple
 from numba import jit, njit, prange
-import numba
 
 
 @njit()
@@ -35,7 +34,6 @@ def get_scanline_ids(pcd: np.ndarray,
     Returns:
     np.ndarray: An array of the unique ids.
     """
-    
     return np.unique(pcd[:, col])
 
 
@@ -54,7 +52,6 @@ def get_scanline(pcd: np.ndarray,
     Returns:
     Tuple[np.ndarray, np.ndarray]: A tuple containing the extracted scanline and its indices in the original pcd.
     """
-    
     # Find the indices where the specified column equals the specified id
     scanline_indices = np.where(pcd[:, col] == id)[0]
     
@@ -104,63 +101,30 @@ def pad_reflect(arr: np.ndarray,
 
 
 @njit()
-def get_dist_3D(x1: float, 
-                y1: float, 
-                z1: float, 
-                x2: float, 
-                y2: float, 
-                z2: float) -> float:
-    """
-    Calculates the Euclidean distance between two points in 3D space.
-
-    Parameters:
-    x1, y1, z1 (float): The x, y, z coordinates of the first point.
-    x2, y2, z2 (float): The x, y, z coordinates of the second point.
-
-    Returns:
-    float: The Euclidean distance between the two points.
-    """
+def get_slope_3D(points_left_side: np.ndarray,
+                 points_right_side: np.ndarray) -> np.ndarray:
     
-    return np.sqrt(np.abs(((x2 - x1) ** 2) + ((y2 - y1) ** 2)) + ((z2 - z1) ** 2))
-
-
-@njit()
-def get_slope_3D(x1: float, 
-                 y1: float, 
-                 z1: float, 
-                 x2: float, 
-                 y2: float, 
-                 z2: float, 
-                 deg: bool=True) -> float:
-    """
-    Calculates the slope between two points in 3D space.
-
-    Parameters:
-    x1, y1, z1 (float): The x, y, z coordinates of the first point.
-    x2, y2, z2 (float): The x, y, z coordinates of the second point.
-    deg (bool): If True, the slope is returned in degrees. If False, the slope is returned in radians.
-
-    Returns:
-    float: The slope between the two points. If the distance between the points is zero, returns NaN.
-    """
+    # Get the z-differences between the points
+    z_diff = points_right_side[:, 2] - points_left_side[:, 2]
     
-    # Calculate the Euclidean distance between the two points
-    dist = get_dist_3D(x1, y1, z1, x2, y2, z2)
+    # Get the 3D distance based on the x,y,z coordinates
+    dist_3d = np.sqrt(((points_right_side[:, 0] - points_left_side[:, 0]) ** 2) + 
+                      ((points_right_side[:, 1] - points_left_side[:, 1]) ** 2) + 
+                      (z_diff ** 2))
     
-    # If the distance is zero, return NaN
-    if dist == 0:
-        return np.nan
-    else:
-        # If deg is True, return the slope in degrees
-        if deg:
-            return np.round(np.rad2deg(np.arctan((z1 - z2) / dist)), 4)
-        # If deg is False, return the slope in radians
-        else:
-            return np.round((z1 - z2) / dist, 4)
+    # Calculate the slope in radians
+    local_slope = np.arctan2(z_diff, dist_3d)
+    
+    # Calculate the slope in degrees
+    local_slope_deg = np.rad2deg(local_slope)
+    
+    return np.abs(local_slope_deg)
+
 
 
 @njit()
 def calculate_slope(scanline: np.ndarray,
+                    num_neighbors: np.ndarray,
                     x_col: int,
                     y_col: int,
                     z_col: int) -> np.ndarray:
@@ -181,64 +145,66 @@ def calculate_slope(scanline: np.ndarray,
     x = scanline[:, x_col]
     y = scanline[:, y_col]
     z = scanline[:, z_col]
-
-    # Initialize an array of zeros to store the slopes
-    slope = np.zeros(scanline.shape[0])
+    
+    # Merge the x, y, z coordinates into a single array
+    scanline_xyz = np.column_stack((x, y, z))
+    
+    # Calculate the maximum number of neighbors to consider
+    num_max_neighbors = int(np.max(num_neighbors))  
+    
+    # Pad the array at the beginning and end
+    padded_scanline = pad_reflect(scanline_xyz, num_max_neighbors)
 
     # Calculate the slope for each point in the scanline
-    for i in range(scanline.shape[0]):
-        # For the first point, calculate the slope with the next point
-        if i == 0:
-            slope[i] = get_slope_3D(x[i], y[i], z[i], x[i+1], y[i+1], z[i+1])
-        # For the middle points, calculate the slope with the previous and next points
-        elif i <= scanline.shape[0]-2:
-            slope[i] = get_slope_3D(x[i-1], y[i-1], z[i-1], x[i+1], y[i+1], z[i+1])
-        # For the last point, calculate the slope with the previous point
-        else:
-            slope[i] = get_slope_3D(x[i-1], y[i-1], z[i-1], x[i], y[i], z[i])
+    slope = np.zeros(scanline.shape[0])
+    for idx in range(scanline.shape[0]):
+        n = int(idx + num_max_neighbors)
+        slope[idx] = np.mean(get_slope_3D(points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
+                                  points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
 
-    return np.abs(slope)
+    return slope
 
 
-@njit()
-def slope_lstsq_local_neighborhood_old(points_left_side: np.ndarray, 
-                                   points_right_side: np.ndarray) -> np.ndarray: 
-    # Merge the left and right side points into a single array
-    neighborhood_points = np.concatenate((points_left_side, points_right_side))
-    X = neighborhood_points[:, 0]
-    Y = neighborhood_points[:, 1]
+
+# @njit()
+# def slope_lstsq_local_neighborhood_old(points_left_side: np.ndarray, 
+#                                    points_right_side: np.ndarray) -> np.ndarray: 
+#     # Merge the left and right side points into a single array
+#     neighborhood_points = np.concatenate((points_left_side, points_right_side))
+#     X = neighborhood_points[:, 0]
+#     Y = neighborhood_points[:, 1]
     
-    # Calculate the least-squares solution
-    A = np.column_stack((X, Y, np.ones(neighborhood_points.shape[0])))
-    B = neighborhood_points[:, 2]
+#     # Calculate the least-squares solution
+#     A = np.column_stack((X, Y, np.ones(neighborhood_points.shape[0])))
+#     B = neighborhood_points[:, 2]
     
-    lstsq_solution, _, _, _ = np.linalg.lstsq(A, B)
+#     lstsq_solution, _, _, _ = np.linalg.lstsq(A, B)
     
-    # Select two points on the line (could be any two points)
-    t1 = 10
-    t2 = 0
+#     # Select two points on the line (could be any two points)
+#     t1 = 10
+#     t2 = 0
     
-    # Calculate the z-coordinates of the two points
-    x1, y1 = t1, t1
-    x2, y2 = t2, t2
-    z1 = lstsq_solution[0]*t1 + lstsq_solution[1]*t1 + lstsq_solution[2]
-    z2 = lstsq_solution[0]*t2 + lstsq_solution[1]*t2 + lstsq_solution[2]
+#     # Calculate the z-coordinates of the two points
+#     x1, y1 = t1, t1
+#     x2, y2 = t2, t2
+#     z1 = lstsq_solution[0]*t1 + lstsq_solution[1]*t1 + lstsq_solution[2]
+#     z2 = lstsq_solution[0]*t2 + lstsq_solution[1]*t2 + lstsq_solution[2]
     
-    # Calculate the change in z
-    z_change = z2 - z1
+#     # Calculate the change in z
+#     z_change = z2 - z1
     
-    # Calculate the distance in 3D (x, y, z)
-    distance = np.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
+#     # Calculate the distance in 3D (x, y, z)
+#     distance = np.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
     
-    slope = np.abs(np.arctan2(z_change, distance))
+#     slope = np.abs(np.arctan2(z_change, distance))
     
-    # Calculate the slope in radians (z_change/distance; equivalent to rise/run)
-    slope_rad = np.arctan2(z_change, distance)
+#     # Calculate the slope in radians (z_change/distance; equivalent to rise/run)
+#     slope_rad = np.arctan2(z_change, distance)
     
-    # Convert the angle to degrees
-    slope_deg = np.rad2deg(np.abs(slope_rad))
+#     # Convert the angle to degrees
+#     slope_deg = np.rad2deg(np.abs(slope_rad))
     
-    return slope_deg
+#     return slope_deg
 
 
 @njit()
@@ -265,14 +231,12 @@ def slope_lstsq_local_neighborhood(points_left_side: np.ndarray,
 
 @njit()
 def calculate_slope_least_squares(scanline: np.ndarray,
-                                 x_col: int,
-                                 y_col: int,
-                                 z_col: int,
-                                 num_neighbors: np.ndarray) -> np.ndarray:
+                                  rho_col: int,
+                                  z_col: int,
+                                  num_neighbors: np.ndarray) -> np.ndarray:
     # Extract the x, y, z coordinates from the scanline (numba does not support indexing with multiple columns)
-    x = scanline[:, 0]
-    y = scanline[:, 1]
-    z = scanline[:, 2]
+    x = scanline[:, rho_col]
+    y = scanline[:, z_col]
     
     # Merge the x, y, z coordinates into a single array
     scanline_xyz = np.column_stack((x, y))
@@ -292,32 +256,6 @@ def calculate_slope_least_squares(scanline: np.ndarray,
     
     
     return slope
-    
-
-
-# @njit()
-# def calculate_curvature_old(slope: np.ndarray) -> np.ndarray:
-#     """
-#     Calculates the curvature of a scanline based on its slope.
-
-#     Parameters:
-#     slope (np.ndarray): An array of the slopes of the scanline.
-
-#     Returns:
-#     np.ndarray: An array of the curvatures of the scanline. The first and last values are set to NaN.
-#     """
-    
-#     # Calculate the difference between adjacent slopes
-#     slope_diff = np.roll(slope, -1) - np.roll(slope, 1)
-    
-#     # Calculate the curvature as the absolute value of the slope difference
-#     curvature = np.abs(slope_diff)
-
-#     # Set the first and last values of the curvature to NaN, as they are not correct due to the roll operation
-#     curvature[0] = np.nan
-#     curvature[-1] = np.nan
-
-#     return curvature
 
 
 
@@ -531,12 +469,12 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         
         if least_squares_method:
             slope_i = calculate_slope_least_squares(scanline=scanline,
-                                                    x_col=x_col,
-                                                    y_col=y_col,
-                                                    z_col=z_col,
-                                                    num_neighbors=k_neighbors)
+                                                    num_neighbors=k_neighbors,
+                                                    rho_col=rho_col,
+                                                    z_col=z_col)
         else:
-            slope_i = calculate_slope(scanline, 
+            slope_i = calculate_slope(scanline=scanline, 
+                                      num_neighbors=k_neighbors,
                                       x_col=x_col, 
                                       y_col=y_col, 
                                       z_col=z_col)
