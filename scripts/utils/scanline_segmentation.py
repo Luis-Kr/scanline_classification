@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Tuple
 from numba import jit, njit, prange
+import numba
 
 
 @njit()
@@ -87,6 +88,22 @@ def calculate_rho_diff(pcd: np.ndarray,
 
 
 @njit()
+def pad_reflect(arr: np.ndarray, 
+                pad_width: int) -> np.ndarray:
+    """
+    Function to pad an array using the 'reflect' mode (numpy.pad replacement). 
+    
+    Parameters:
+    arr (np.ndarray): The input array to be padded.
+    pad_width (int): The number of elements by which to pad the array.
+    
+    Returns:
+    np.ndarray: The padded array.
+    """
+    return np.concatenate((arr[pad_width:0:-1], arr, arr[-2:-pad_width-2:-1]))
+
+
+@njit()
 def get_dist_3D(x1: float, 
                 y1: float, 
                 z1: float, 
@@ -136,17 +153,17 @@ def get_slope_3D(x1: float,
     else:
         # If deg is True, return the slope in degrees
         if deg:
-            return np.round(np.rad2deg((z1 - z2) / dist), 4)
+            return np.round(np.rad2deg(np.arctan((z1 - z2) / dist)), 4)
         # If deg is False, return the slope in radians
         else:
             return np.round((z1 - z2) / dist, 4)
 
- 
+
 @njit()
 def calculate_slope(scanline: np.ndarray,
-                    x_col: int=0,
-                    y_col: int=1,
-                    z_col: int=2) -> np.ndarray:
+                    x_col: int,
+                    y_col: int,
+                    z_col: int) -> np.ndarray:
     """
     Calculates the slope between each point and its two neighbors (central differences) in a scanline.
 
@@ -183,6 +200,101 @@ def calculate_slope(scanline: np.ndarray,
     return np.abs(slope)
 
 
+@njit()
+def slope_lstsq_local_neighborhood_old(points_left_side: np.ndarray, 
+                                   points_right_side: np.ndarray) -> np.ndarray: 
+    # Merge the left and right side points into a single array
+    neighborhood_points = np.concatenate((points_left_side, points_right_side))
+    X = neighborhood_points[:, 0]
+    Y = neighborhood_points[:, 1]
+    
+    # Calculate the least-squares solution
+    A = np.column_stack((X, Y, np.ones(neighborhood_points.shape[0])))
+    B = neighborhood_points[:, 2]
+    
+    lstsq_solution, _, _, _ = np.linalg.lstsq(A, B)
+    
+    # Select two points on the line (could be any two points)
+    t1 = 10
+    t2 = 0
+    
+    # Calculate the z-coordinates of the two points
+    x1, y1 = t1, t1
+    x2, y2 = t2, t2
+    z1 = lstsq_solution[0]*t1 + lstsq_solution[1]*t1 + lstsq_solution[2]
+    z2 = lstsq_solution[0]*t2 + lstsq_solution[1]*t2 + lstsq_solution[2]
+    
+    # Calculate the change in z
+    z_change = z2 - z1
+    
+    # Calculate the distance in 3D (x, y, z)
+    distance = np.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
+    
+    slope = np.abs(np.arctan2(z_change, distance))
+    
+    # Calculate the slope in radians (z_change/distance; equivalent to rise/run)
+    slope_rad = np.arctan2(z_change, distance)
+    
+    # Convert the angle to degrees
+    slope_deg = np.rad2deg(np.abs(slope_rad))
+    
+    return slope_deg
+
+
+@njit()
+def slope_lstsq_local_neighborhood(points_left_side: np.ndarray, 
+                                   points_right_side: np.ndarray) -> np.ndarray: 
+    
+    """2D case with rho and z-coordinates"""
+    # Merge the left and right side points into a single array
+    neighborhood_points = np.concatenate((points_left_side, points_right_side))
+    X = neighborhood_points[:, 0]
+    
+    # Calculate the least-squares solution
+    A = np.column_stack((X, np.ones(neighborhood_points.shape[0])))
+    B = neighborhood_points[:, 1]
+    
+    lstsq_solution, _, _, _ = np.linalg.lstsq(A, B)
+    
+    # Convert the angle to degrees
+    slope_deg = np.rad2deg(np.abs(np.arctan(lstsq_solution[0])))
+    
+    return slope_deg
+
+
+
+@njit()
+def calculate_slope_least_squares(scanline: np.ndarray,
+                                 x_col: int,
+                                 y_col: int,
+                                 z_col: int,
+                                 num_neighbors: np.ndarray) -> np.ndarray:
+    # Extract the x, y, z coordinates from the scanline (numba does not support indexing with multiple columns)
+    x = scanline[:, 0]
+    y = scanline[:, 1]
+    z = scanline[:, 2]
+    
+    # Merge the x, y, z coordinates into a single array
+    scanline_xyz = np.column_stack((x, y))
+    
+    # Calculate the maximum number of neighbors to consider
+    num_max_neighbors = int(np.max(num_neighbors))  
+    
+    # Pad the array at the beginning and end
+    padded_scanline = pad_reflect(scanline_xyz, num_max_neighbors)
+    
+    # Calculate the slope
+    slope = np.zeros(scanline.shape[0])
+    for idx in range(scanline.shape[0]):
+        n = int(idx + num_max_neighbors)
+        slope[idx] = slope_lstsq_local_neighborhood(points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
+                                                    points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1])
+    
+    
+    return slope
+    
+
+
 # @njit()
 # def calculate_curvature_old(slope: np.ndarray) -> np.ndarray:
 #     """
@@ -208,24 +320,9 @@ def calculate_slope(scanline: np.ndarray,
 #     return curvature
 
 
-@njit()
-def pad_reflect(arr: np.ndarray, 
-                pad_width: int) -> np.ndarray:
-    """
-    Function to pad an array using the 'reflect' mode (numpy.pad replacement). 
-    
-    Parameters:
-    arr (np.ndarray): The input array to be padded.
-    pad_width (int): The number of elements by which to pad the array.
-    
-    Returns:
-    np.ndarray: The padded array.
-    """
-    return np.concatenate((arr[pad_width:0:-1], arr, arr[-2:-pad_width-2:-1]))
-
 
 @njit()
-def calculate_curvature(arr: np.ndarray, 
+def calculate_curvature(slope_arr: np.ndarray, 
                         num_neighbors: np.ndarray) -> np.ndarray:
     """
     Function to calculate the curvature between elements in an array and their neighbors.
@@ -241,13 +338,13 @@ def calculate_curvature(arr: np.ndarray,
     num_max_neighbors = int(np.max(num_neighbors))
     
     # Pad the array at the beginning and end
-    pad_arr = pad_reflect(arr, num_max_neighbors)
+    pad_arr = pad_reflect(slope_arr, num_max_neighbors)
 
     # Initialize an empty array to store the differences
-    curvature = np.zeros(arr.shape[0])
+    curvature = np.zeros(slope_arr.shape[0])
     
     # Loop over each point in the original array
-    for idx in range(arr.shape[0]):
+    for idx in range(slope_arr.shape[0]):
         i = idx + num_max_neighbors
         # Calculate the differences
         curvature[idx] = np.mean(np.abs(pad_arr[i+1:i+num_neighbors[idx]+1] - pad_arr[i-num_neighbors[idx]:i][::-1]))
@@ -380,7 +477,8 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                    z_col: int,
                                    scanline_id_col: int,
                                    expected_value_col: int,
-                                   rho_col: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                                   rho_col: int,
+                                   least_squares_method: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Calculates the segmentation metrics (rho_diff, slope and curvature) for each scanline.
 
@@ -422,7 +520,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         k_neighbors[k_neighbors == 1] = 2
         
         # Smoothing with constant k
-        #k_neighbors = np.ones(scanline.shape[0]) * 10
+        #k_neighbors = np.ones(scanline.shape[0]) * 5
         
         # No smoothing case
         #k_neighbors = np.ones(scanline.shape[0])
@@ -431,12 +529,19 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         rho_diff_i = calculate_rho_diff(scanline, 
                                         col=rho_col)
         
-        slope_i = calculate_slope(scanline, 
-                                  x_col=x_col, 
-                                  y_col=y_col, 
-                                  z_col=z_col)
+        if least_squares_method:
+            slope_i = calculate_slope_least_squares(scanline=scanline,
+                                                    x_col=x_col,
+                                                    y_col=y_col,
+                                                    z_col=z_col,
+                                                    num_neighbors=k_neighbors)
+        else:
+            slope_i = calculate_slope(scanline, 
+                                      x_col=x_col, 
+                                      y_col=y_col, 
+                                      z_col=z_col)
         
-        curvature_i = calculate_curvature(arr=slope_i, 
+        curvature_i = calculate_curvature(slope_arr=slope_i, 
                                           num_neighbors=k_neighbors)
         
         roughness_i = calculate_roughness(scanline=scanline, 
