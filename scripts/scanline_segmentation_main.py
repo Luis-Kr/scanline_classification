@@ -96,9 +96,15 @@ def scanline_segmentation(cfg: DictConfig,
     logger.info('Calculating the segmentation metrics rho_diff, slope, curvature, roughness and normals...')
     
     # Sort the pcd by the vertical angle
-    pcd_sorted, sort_indices = scs.sort_scanline(pcd, col=cfg.pcd_col.vert_angle)
+    pcd_sorted, sort_indices = scs.sort_scanline(pcd=pcd, 
+                                                 scanline_id_col=cfg.pcd_col.scanline_id, 
+                                                 vert_angle_col=cfg.pcd_col.vert_angle)
+    
+    scanline_intervals = scs.get_scanline_intervals(pcd=pcd_sorted, 
+                                                    scanline_id_col=cfg.pcd_col.scanline_id)
     
     rho_diff, slope, curvature, roughness = scs.calculate_segmentation_metrics(pcd=pcd_sorted, 
+                                                                               scanline_intervals=scanline_intervals,
                                                                                x_col=cfg.pcd_col.x,
                                                                                y_col=cfg.pcd_col.y,
                                                                                z_col=cfg.pcd_col.z,
@@ -113,9 +119,6 @@ def scanline_segmentation(cfg: DictConfig,
         pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, roughness, normals_xyz[sort_indices]]
     else:
         pcd_sorted = np.c_[pcd_sorted, rho_diff, slope, curvature, roughness, normals_xyz[sort_indices], normals[sort_indices]]
-        
-    pcd_sorted = pcd_sorted[np.lexsort(np.rot90(pcd_sorted[:,(cfg.pcd_col.scanline_id,
-                                                              cfg.pcd_col.vert_angle)]))]
     
     logger.info('Scanline segmentation...')
     segment_ids = scs.scanline_segmentation(pcd_sorted,
