@@ -1,11 +1,11 @@
 import numpy as np
 from typing import Tuple
-from numba import jit, njit, prange
+from numba import njit, prange
 
 
-@njit()
 def sort_scanline(pcd: np.ndarray, 
-                  col: int) -> np.ndarray:
+                  scanline_id_col: int,
+                  vert_angle_col: int) -> np.ndarray:
     """
     Sorts a point cloud (pcd) array based on a specified column.
 
@@ -17,13 +17,14 @@ def sort_scanline(pcd: np.ndarray,
     np.ndarray: The sorted point cloud data array.
     """
     # Sort the pcd by the specified column and return the sorted pcd
-    sort_idx = np.argsort(pcd[:, col])
+    sort_idx = np.lexsort(np.rot90(pcd[:,(scanline_id_col, 
+                                          vert_angle_col)]))
+    
     return pcd[sort_idx], sort_idx
 
 
-@njit()
-def get_scanline_ids(pcd: np.ndarray,
-                     col: int) -> np.ndarray:
+def get_scanline_intervals(pcd: np.ndarray,
+                           scanline_id_col: int) -> np.ndarray:
     """
     Extracts the unique scanline ids. 
 
@@ -34,13 +35,25 @@ def get_scanline_ids(pcd: np.ndarray,
     Returns:
     np.ndarray: An array of the unique ids.
     """
-    return np.unique(pcd[:, col])
+    # Calculate the difference between consecutive elements
+    diff = np.diff(pcd[:, scanline_id_col])
+
+    # Find the indices where the difference is greater than 0
+    scanline_intervals = np.where(diff > 0)[0] + 1
+
+    # add the first index
+    scanline_intervals = np.insert(scanline_intervals, 0, 0)
+
+    # add the last index
+    scanline_intervals = np.append(scanline_intervals, pcd.shape[0])
+    
+    return scanline_intervals
 
 
 @njit()
 def get_scanline(pcd: np.ndarray, 
-                 col: int, 
-                 id: int) -> Tuple[np.ndarray, np.ndarray]:
+                 lower_boundary: int, 
+                 upper_boundary: int) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extracts a scanline from a point cloud.
 
@@ -52,11 +65,8 @@ def get_scanline(pcd: np.ndarray,
     Returns:
     Tuple[np.ndarray, np.ndarray]: A tuple containing the extracted scanline and its indices in the original pcd.
     """
-    # Find the indices where the specified column equals the specified id
-    scanline_indices = np.where(pcd[:, col] == id)[0]
-    
-    # Extract the scanline from the pcd
-    scanline = pcd[scanline_indices]
+    scanline = pcd[lower_boundary:upper_boundary]
+    scanline_indices = np.arange(lower_boundary, upper_boundary)
     
     return scanline, scanline_indices
 
@@ -74,7 +84,6 @@ def calculate_rho_diff(pcd: np.ndarray,
     Returns:
     np.ndarray: An array of the absolute differences between adjacent elements in the specified column.
     """
-    
     # Calculate the absolute difference between adjacent elements
     rho_diff = np.abs(np.diff(np.ascontiguousarray(pcd[:, col])))
 
@@ -164,48 +173,6 @@ def calculate_slope(scanline: np.ndarray,
     return slope
 
 
-
-# @njit()
-# def slope_lstsq_local_neighborhood_old(points_left_side: np.ndarray, 
-#                                    points_right_side: np.ndarray) -> np.ndarray: 
-#     # Merge the left and right side points into a single array
-#     neighborhood_points = np.concatenate((points_left_side, points_right_side))
-#     X = neighborhood_points[:, 0]
-#     Y = neighborhood_points[:, 1]
-    
-#     # Calculate the least-squares solution
-#     A = np.column_stack((X, Y, np.ones(neighborhood_points.shape[0])))
-#     B = neighborhood_points[:, 2]
-    
-#     lstsq_solution, _, _, _ = np.linalg.lstsq(A, B)
-    
-#     # Select two points on the line (could be any two points)
-#     t1 = 10
-#     t2 = 0
-    
-#     # Calculate the z-coordinates of the two points
-#     x1, y1 = t1, t1
-#     x2, y2 = t2, t2
-#     z1 = lstsq_solution[0]*t1 + lstsq_solution[1]*t1 + lstsq_solution[2]
-#     z2 = lstsq_solution[0]*t2 + lstsq_solution[1]*t2 + lstsq_solution[2]
-    
-#     # Calculate the change in z
-#     z_change = z2 - z1
-    
-#     # Calculate the distance in 3D (x, y, z)
-#     distance = np.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
-    
-#     slope = np.abs(np.arctan2(z_change, distance))
-    
-#     # Calculate the slope in radians (z_change/distance; equivalent to rise/run)
-#     slope_rad = np.arctan2(z_change, distance)
-    
-#     # Convert the angle to degrees
-#     slope_deg = np.rad2deg(np.abs(slope_rad))
-    
-#     return slope_deg
-
-
 @njit()
 def slope_lstsq_local_neighborhood(points_left_side: np.ndarray, 
                                    points_right_side: np.ndarray) -> np.ndarray: 
@@ -225,7 +192,6 @@ def slope_lstsq_local_neighborhood(points_left_side: np.ndarray,
     slope_deg = np.rad2deg(np.abs(np.arctan(lstsq_solution[0])))
     
     return slope_deg
-
 
 
 @njit()
@@ -252,7 +218,6 @@ def calculate_slope_least_squares(scanline: np.ndarray,
         n = int(idx + num_max_neighbors)
         slope[idx] = slope_lstsq_local_neighborhood(points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
                                                     points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1])
-    
     
     return slope
 
@@ -352,67 +317,12 @@ def calculate_roughness(scanline: np.ndarray,
     return roughness
 
 
-# @njit()
-# def orient_cross_product(vector_ba: np.ndarray, 
-#                          vector_bc: np.ndarray, 
-#                          viewpoint: np.ndarray) -> np.ndarray:
-#     """
-#     Orient the cross product (normal) of two vectors towards a viewpoint.
-
-#     Parameters:
-#     vector_ba (np.ndarray): The first vector.
-#     vector_bc (np.ndarray): The second vector.
-#     viewpoint (np.ndarray): The viewpoint.
-
-#     Returns:
-#     np.ndarray: The oriented cross product of the two vectors.
-#     """
-#     # Calculate the cross product of the two vectors
-#     cross_product = np.cross(vector_ba, vector_bc)
-    
-#     # Calculate the vector from the cross product to the viewpoint
-#     vector_to_viewpoint = viewpoint - cross_product
-    
-#     # If the cross product is not oriented towards the viewpoint, flip it
-#     if np.dot(cross_product, vector_to_viewpoint) < 0:
-#         cross_product = np.cross(vector_bc, vector_ba)
-    
-#     return cross_product
-
-
-# @njit()
-# def compute_normals(pcd_scanline, scanner_pos, x_col, y_col, z_col):
-#     normals = np.zeros((pcd_scanline.shape[0], 3))
-    
-#     pcd_x = pcd_scanline[:, x_col]
-#     pcd_y = pcd_scanline[:, y_col]
-#     pcd_z = pcd_scanline[:, z_col]
-#     pcd_scanline_xyz = np.column_stack((pcd_x, pcd_y, pcd_z))
-    
-#     for i in prange(pcd_scanline_xyz.shape[0]):
-#         if i == 0:
-#             #normal = np.cross(pcd_scanline_xyz[i+1], pcd_scanline_xyz[i])
-#             normal = orient_cross_product(pcd_scanline_xyz[i+1], pcd_scanline_xyz[i], scanner_pos)
-#             normals[i] = ( normal / np.linalg.norm(normal) ) / 1
-#         elif i <= pcd_scanline_xyz.shape[0]-2:
-#             #normal = np.cross(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i+1])
-#             normal = orient_cross_product(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i+1], scanner_pos)
-#             normals[i] = (normal / np.linalg.norm(normal)) / 1
-#         else:
-#             #normal = np.cross(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i])
-#             normal = orient_cross_product(pcd_scanline_xyz[i-1], pcd_scanline_xyz[i], scanner_pos)
-#             normals[i] = (normal / np.linalg.norm(normal)) / 1
-
-#     return normals
-
-
-
 @njit(parallel=True)
 def calculate_segmentation_metrics(pcd: np.ndarray,
+                                   scanline_intervals: np.ndarray,
                                    x_col: int,
                                    y_col: int,
                                    z_col: int,
-                                   scanline_id_col: int,
                                    expected_value_col: int,
                                    rho_col: int,
                                    least_squares_method: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -431,9 +341,6 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     Returns:
     tuple: A tuple of three arrays, each containing one of the segmentation metrics (rho_diff, slope, curvature, sorted pcd) for the pcd.
     """
-    # Extract the unique scanline ids from the pcd
-    scanline_ids = get_scanline_ids(pcd, col=scanline_id_col)
-    
     # Create empty arrays to store the segmentation metrics
     rho_diff = np.zeros(pcd.shape[0])
     slope = np.zeros(pcd.shape[0])
@@ -441,12 +348,11 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     roughness = np.zeros(pcd.shape[0])
     
     # Calculate the segmentation metrics for each scanline
-    for i in prange(scanline_ids.shape[0]):
-        #print(f'Calculating segmentation metrics for scanline {i+1}/{scanline_ids.shape[0]}')
+    for i in prange(scanline_intervals.shape[0]-1):
         # Extract the current scanline and its indices in the pcd
-        scanline, scanline_indices = get_scanline(pcd, 
-                                                  col=scanline_id_col, 
-                                                  id=int(scanline_ids[i]))
+        scanline, scanline_indices = get_scanline(pcd=pcd, 
+                                                  lower_boundary=scanline_intervals[i], 
+                                                  upper_boundary=scanline_intervals[i+1])
         
         density = 1 / scanline[:, expected_value_col]
         
@@ -462,7 +368,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         # No smoothing case
         #k_neighbors = np.ones(scanline.shape[0])
         
-        # Calculate the rho_diff, slope, and curvature for the current scanline
+        # Calculate the rho_diff, slope, curvature, and roughness for the current scanline
         rho_diff_i = calculate_rho_diff(scanline, 
                                         col=rho_col)
         
@@ -487,12 +393,17 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                           y_col=y_col,
                                           z_col=z_col)
         
-        # Store the calculated metrics in the corresponding arrays
-        for j in prange(scanline.shape[0]):
-            rho_diff[scanline_indices[j]] = rho_diff_i[j]
-            slope[scanline_indices[j]] = slope_i[j]
-            curvature[scanline_indices[j]] = curvature_i[j]
-            roughness[scanline_indices[j]] = roughness_i[j]
+        rho_diff[scanline_indices] = rho_diff_i
+        slope[scanline_indices] = slope_i
+        curvature[scanline_indices] = curvature_i
+        roughness[scanline_indices] = roughness_i
+                
+        # # Store the calculated metrics in the corresponding arrays
+        # for j in prange(scanline.shape[0]):
+        #     rho_diff[scanline_indices[j]] = rho_diff_i[j]
+        #     slope[scanline_indices[j]] = slope_i[j]
+        #     curvature[scanline_indices[j]] = curvature_i[j]
+        #     roughness[scanline_indices[j]] = roughness_i[j]
 
     return rho_diff, slope, curvature, roughness
 
