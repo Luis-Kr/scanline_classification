@@ -121,7 +121,6 @@ def get_slope_3D(points_left_side: np.ndarray,
     return np.abs(local_slope_deg)
 
 
-
 @njit()
 def calculate_slope(scanline: np.ndarray,
                     num_neighbors: np.ndarray,

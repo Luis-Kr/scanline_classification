@@ -30,6 +30,8 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
                                             horiz_angle=cfg.pcd_col.horiz_angle,
                                             vert_angle=cfg.pcd_col.vert_angle)
     
+    print(knickpoints.shape)
+    
     # Extract the scanlines
     logger.info('Extracting the scanlines...')
     
@@ -102,7 +104,8 @@ def scanline_segmentation(cfg: DictConfig,
                                                                                z_col=cfg.pcd_col.z,
                                                                                scanline_id_col=cfg.pcd_col.scanline_id,
                                                                                expected_value_col=cfg.pcd_col.expected_value,
-                                                                               rho_col=cfg.pcd_col.rho)
+                                                                               rho_col=cfg.pcd_col.rho,
+                                                                               least_squares_method=cfg.scs.least_squares_method)
     
     # Add the segmentation metrics to the point cloud data
     logger.info('Sorting the PCD...')
@@ -190,6 +193,8 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
                                                    normals_col=np.array([cfg.pcd_col.nx,
                                                                          cfg.pcd_col.ny,
                                                                          cfg.pcd_col.nz]))
+    
+    print(pcd_processed_segments.shape)
     
     if not cfg.sce.calculate_normals:
         # remove the last 21 values from the processed segments

@@ -42,6 +42,7 @@ scs:
   expected_value_factor: 50
   slope_threshold: 0.25
   curvature_threshold: 30
+  least_squares_method: True
   fmt_normals:  "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %u %1.4f %1.4f %1.6f %1.8f %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
   fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %u %1.4f %1.4f %1.6f %1.8f %u %1.4f %1.4f %1.4f"
   save_pcd: True
