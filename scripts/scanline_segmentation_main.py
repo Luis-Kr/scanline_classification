@@ -108,7 +108,6 @@ def scanline_segmentation(cfg: DictConfig,
                                                                                x_col=cfg.pcd_col.x,
                                                                                y_col=cfg.pcd_col.y,
                                                                                z_col=cfg.pcd_col.z,
-                                                                               scanline_id_col=cfg.pcd_col.scanline_id,
                                                                                expected_value_col=cfg.pcd_col.expected_value,
                                                                                rho_col=cfg.pcd_col.rho,
                                                                                least_squares_method=cfg.scs.least_squares_method)
