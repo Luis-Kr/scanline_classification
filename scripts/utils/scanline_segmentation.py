@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple
 from numba import njit, prange
-
+from omegaconf import DictConfig
 
 def sort_scanline(pcd: np.ndarray, 
                   scanline_id_col: int,
