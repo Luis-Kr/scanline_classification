@@ -211,8 +211,8 @@ def kdtree_maxdist_normals(cfg, pcd, num_nearest_neighbors=4):
     # Query the k-d tree for the num_nearest_neighbors nearest neighbors of each point in point_clouds
     distances, indices = kdtree.query(pcd_centered, k=num_nearest_neighbors, workers=-1)
     
-    # Calculate max of 4 nearest distances, excluding self (index 0)
-    max_distances = np.max(distances[:, 1:5], axis=1)
+    # Calculate max of num_nearest_neighbors nearest distances, excluding self (index 0)
+    max_distances = np.max(distances[:, 1:num_nearest_neighbors], axis=1)
     
     if not cfg.sce.calculate_normals:
         return max_distances, pcd_centered, None
