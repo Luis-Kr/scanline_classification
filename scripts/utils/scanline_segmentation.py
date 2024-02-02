@@ -6,17 +6,7 @@ from numba import njit, prange
 def sort_scanline(pcd: np.ndarray, 
                   scanline_id_col: int,
                   vert_angle_col: int) -> np.ndarray:
-    """
-    Sorts a point cloud (pcd) array based on a specified column.
-
-    Parameters:
-    pcd (np.ndarray): The point cloud array.
-    col (int): The column index to sort by.
-
-    Returns:
-    np.ndarray: The sorted point cloud data array.
-    """
-    # Sort the pcd by the specified column and return the sorted pcd
+    # Sort point cloud based on scanline ID and vertical angle
     sort_idx = np.lexsort(np.rot90(pcd[:,(scanline_id_col, 
                                           vert_angle_col)]))
     
@@ -25,26 +15,14 @@ def sort_scanline(pcd: np.ndarray,
 
 def get_scanline_intervals(pcd: np.ndarray,
                            scanline_id_col: int) -> np.ndarray:
-    """
-    Extracts the unique scanline ids. 
-
-    Parameters:
-    pcd (np.ndarray): The point cloud array.
-    col (int): The column index to extract the ids from.
-
-    Returns:
-    np.ndarray: An array of the unique ids.
-    """
-    # Calculate the difference between consecutive elements
+    # Get differences between consecutive scanline IDs
     diff = np.diff(pcd[:, scanline_id_col])
 
-    # Find the indices where the difference is greater than 0
+    # Get indices where scanline ID changes
     scanline_intervals = np.where(diff > 0)[0] + 1
 
-    # add the first index
+    # Add first and last indices
     scanline_intervals = np.insert(scanline_intervals, 0, 0)
-
-    # add the last index
     scanline_intervals = np.append(scanline_intervals, pcd.shape[0])
     
     return scanline_intervals
@@ -54,18 +32,10 @@ def get_scanline_intervals(pcd: np.ndarray,
 def get_scanline(pcd: np.ndarray, 
                  lower_boundary: int, 
                  upper_boundary: int) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Extracts a scanline from a point cloud.
-
-    Parameters:
-    pcd (np.ndarray): The point cloud array.
-    col (int): The column index to look for the id.
-    id (int): The id to look for in the specified column.
-
-    Returns:
-    Tuple[np.ndarray, np.ndarray]: A tuple containing the extracted scanline and its indices in the original pcd.
-    """
+    # Extract a scanline from the point cloud given its lower and upper boundaries
     scanline = pcd[lower_boundary:upper_boundary]
+    
+    # Generate an array of indices corresponding to the scanline
     scanline_indices = np.arange(lower_boundary, upper_boundary)
     
     return scanline, scanline_indices
@@ -73,20 +43,10 @@ def get_scanline(pcd: np.ndarray,
 
 @njit()
 def calculate_rho_diff(pcd: np.ndarray, 
-                       col: int) -> np.ndarray:
-    """
-    Calculates the absolute difference between adjacent elements in a specified column of a point cloud array.
-
-    Parameters:
-    pcd (np.ndarray): The point cloud array.
-    col (int): The column index to calculate the difference on.
-
-    Returns:
-    np.ndarray: An array of the absolute differences between adjacent elements in the specified column.
-    """
+                       rho_col: int) -> np.ndarray:
     # Calculate the absolute difference between adjacent elements
-    rho_diff = np.abs(np.diff(np.ascontiguousarray(pcd[:, col])))
-
+    rho_diff = np.abs(np.diff(np.ascontiguousarray(pcd[:, rho_col])))
+    
     # Append the last element of rho_diff to itself to maintain the same length as the input pcd
     rho_diff = np.append(rho_diff, rho_diff[-1])
     
@@ -112,7 +72,6 @@ def pad_reflect(arr: np.ndarray,
 @njit()
 def get_slope_3D(points_left_side: np.ndarray,
                  points_right_side: np.ndarray) -> np.ndarray:
-    
     # Get the z-differences between the points
     z_diff = points_right_side[:, 2] - points_left_side[:, 2]
     
@@ -131,44 +90,22 @@ def get_slope_3D(points_left_side: np.ndarray,
 
 
 @njit()
-def calculate_slope(scanline: np.ndarray,
+def calculate_slope(scanline_xyz: np.ndarray,
+                    padded_scanline: np.ndarray,
                     num_neighbors: np.ndarray,
-                    x_col: int,
-                    y_col: int,
-                    z_col: int) -> np.ndarray:
-    """
-    Calculates the slope between each point and its two neighbors (central differences) in a scanline.
-
-    Parameters:
-    scanline (np.ndarray): The scanline, a 2D array where each row is a point.
-    x_col (int): The column index of the x coordinates.
-    y_col (int): The column index of the y coordinates.
-    z_col (int): The column index of the z coordinates.
-
-    Returns:
-    np.ndarray: An array of the absolute slopes between each point and its neighbors.
-    """
+                    max_num_neighbors: int) -> np.ndarray:
+    # Initialize an array to store the slope values
+    slope = np.zeros(scanline_xyz.shape[0])
     
-    # Extract the x, y, z coordinates from the scanline
-    x = scanline[:, x_col]
-    y = scanline[:, y_col]
-    z = scanline[:, z_col]
-    
-    # Merge the x, y, z coordinates into a single array
-    scanline_xyz = np.column_stack((x, y, z))
-    
-    # Calculate the maximum number of neighbors to consider
-    num_max_neighbors = int(np.max(num_neighbors))  
-    
-    # Pad the array at the beginning and end
-    padded_scanline = pad_reflect(scanline_xyz, num_max_neighbors)
-
-    # Calculate the slope for each point in the scanline
-    slope = np.zeros(scanline.shape[0])
-    for idx in range(scanline.shape[0]):
-        n = int(idx + num_max_neighbors)
+    # Loop over each point in the scanline
+    for idx in range(scanline_xyz.shape[0]):
+        # Calculate the end index for the neighbors on the right
+        n = int(idx + max_num_neighbors)
+        
+        # Calculate the slope at the current point by taking the mean slope
+        # between the current point and its neighbors on the left and right
         slope[idx] = np.mean(get_slope_3D(points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
-                                  points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
+                                          points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
 
     return slope
 
@@ -176,19 +113,21 @@ def calculate_slope(scanline: np.ndarray,
 @njit()
 def slope_lstsq_local_neighborhood(points_left_side: np.ndarray, 
                                    points_right_side: np.ndarray) -> np.ndarray: 
-    
-    """2D case with rho and z-coordinates"""
-    # Merge the left and right side points into a single array
     neighborhood_points = np.concatenate((points_left_side, points_right_side))
+    
+    # Extract the rho-values from the neighborhood points
     X = neighborhood_points[:, 0]
     
-    # Calculate the least-squares solution
+    # Create a matrix A with rho-values and a column of ones
     A = np.column_stack((X, np.ones(neighborhood_points.shape[0])))
+    
+    # Extract the z-coordinates from the neighborhood points
     B = neighborhood_points[:, 1]
     
+    # Solve the linear system Ax = B using least squares method
     lstsq_solution, _, _, _ = np.linalg.lstsq(A, B)
     
-    # Convert the angle to degrees
+    # Calculate the slope in degrees
     slope_deg = np.rad2deg(np.abs(np.arctan(lstsq_solution[0])))
     
     return slope_deg
@@ -196,28 +135,26 @@ def slope_lstsq_local_neighborhood(points_left_side: np.ndarray,
 
 @njit()
 def calculate_slope_least_squares(scanline: np.ndarray,
+                                  num_neighbors: np.ndarray,
+                                  max_num_neighbors: int,
                                   rho_col: int,
-                                  z_col: int,
-                                  num_neighbors: np.ndarray) -> np.ndarray:
-    # Extract the x, y, z coordinates from the scanline (numba does not support indexing with multiple columns)
-    x = scanline[:, rho_col]
-    y = scanline[:, z_col]
+                                  z_col: int) -> np.ndarray:
+    # Extract the rho and z coordinates from the scanline
+    rho = scanline[:, rho_col]
+    z = scanline[:, z_col]
     
-    # Merge the x, y, z coordinates into a single array
-    scanline_xyz = np.column_stack((x, y))
-    
-    # Calculate the maximum number of neighbors to consider
-    num_max_neighbors = int(np.max(num_neighbors))  
+    # Merge the rho and z-coordinates into a single array
+    scanline_rho_z = np.column_stack((rho, z))
     
     # Pad the array at the beginning and end
-    padded_scanline = pad_reflect(scanline_xyz, num_max_neighbors)
+    pad_scanline_rho_z = pad_reflect(scanline_rho_z, max_num_neighbors)
     
-    # Calculate the slope
+    # Calculate the slope using the least-squares method for each point in the scanline
     slope = np.zeros(scanline.shape[0])
     for idx in range(scanline.shape[0]):
-        n = int(idx + num_max_neighbors)
-        slope[idx] = slope_lstsq_local_neighborhood(points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
-                                                    points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1])
+        n = int(idx + max_num_neighbors)
+        slope[idx] = slope_lstsq_local_neighborhood(points_left_side=pad_scanline_rho_z[n-num_neighbors[idx]:n], 
+                                                    points_right_side=pad_scanline_rho_z[n+1:n+num_neighbors[idx]+1])
     
     return slope
 
@@ -225,31 +162,17 @@ def calculate_slope_least_squares(scanline: np.ndarray,
 
 @njit()
 def calculate_curvature(slope_arr: np.ndarray, 
-                        num_neighbors: np.ndarray) -> np.ndarray:
-    """
-    Function to calculate the curvature between elements in an array and their neighbors.
-    
-    Parameters:
-    arr (np.ndarray): The input array.
-    num_neighbors (np.ndarray): The number of neighbors to consider on each side for each element in arr.
-    
-    Returns:
-    np.ndarray: An array of the calculated differences.
-    """
-    # Calculate the maximum number of neighbors to consider
-    num_max_neighbors = int(np.max(num_neighbors))
-    
+                        num_neighbors: np.ndarray,
+                        max_num_neighbors: int) -> np.ndarray:
     # Pad the array at the beginning and end
-    pad_arr = pad_reflect(slope_arr, num_max_neighbors)
-
-    # Initialize an empty array to store the differences
+    pad_slope_arr = pad_reflect(slope_arr, max_num_neighbors)
+    
+    # Store the curvature values
     curvature = np.zeros(slope_arr.shape[0])
     
-    # Loop over each point in the original array
     for idx in range(slope_arr.shape[0]):
-        i = idx + num_max_neighbors
-        # Calculate the differences
-        curvature[idx] = np.mean(np.abs(pad_arr[i+1:i+num_neighbors[idx]+1] - pad_arr[i-num_neighbors[idx]:i][::-1]))
+        i = idx + max_num_neighbors
+        curvature[idx] = np.mean(np.abs(pad_slope_arr[i+1:i+num_neighbors[idx]+1] - pad_slope_arr[i-num_neighbors[idx]:i][::-1]))
 
     return curvature
 
@@ -263,53 +186,34 @@ def calculate_distances_point_lines(center_point: np.ndarray,
     distance = np.zeros(vec_p1_p0.shape[0])
     
     for v in range(vec_p1_p0.shape[0]):
+        # Calculate the dot product of the direction vector with itself
         dproduct_direction_vector = np.dot(a[v], a[v])
+        
+        # If the dot product is not zero (i.e., the points are not identical)
         if dproduct_direction_vector != 0:
+            # Calculate the parameter t for the line equation
             t = np.dot(vec_p1_p0[v], a[v]) / dproduct_direction_vector
+            
+            # Calculate the point on the line that is closest to the center point
             l1 = points_left_side[v] + t*a[v]
+            
+            # Calculate the distance from this point to the center point
             distance[v] = np.linalg.norm(l1 - center_point)
         else:
-            # ZeroDivisionError occurs because points are too close together (identical points) 
-            #print('ZeroDivisionError')
+            # If the dot product is zero (i.e., the points are identical), set the distance to zero
             distance[v] = 0
             
     return distance
 
 
 @njit()
-def calculate_roughness(scanline: np.ndarray,
+def calculate_roughness(scanline_xyz: np.ndarray,
+                        padded_scanline: np.ndarray,
                         num_neighbors: np.ndarray,
-                        x_col: int,
-                        y_col: int,
-                        z_col: int) -> np.ndarray:
-    """
-    Function to calculate the roughness of a scanline with variable number of neighbors.
-    
-    Parameters:
-    scanline (np.ndarray): The input scanline.
-    num_neighbors (np.ndarray): The number of neighbors to consider on each side for each point in the scanline.
-    
-    Returns:
-    np.ndarray: An array of the calculated roughness.
-    """ 
-    # Extract the x, y, z coordinates from the scanline (numba does not support indexing with multiple columns)
-    x = scanline[:, x_col]
-    y = scanline[:, y_col]
-    z = scanline[:, z_col]
-    
-    # Merge the x, y, z coordinates into a single array
-    scanline_xyz = np.column_stack((x, y, z))
-    
-    # Calculate the maximum number of neighbors to consider
-    num_max_neighbors = int(np.max(num_neighbors))  
-    
-    # Pad the array at the beginning and end
-    padded_scanline = pad_reflect(scanline_xyz, num_max_neighbors)
-    
-    # Calculate the roughness
-    roughness = np.zeros(scanline.shape[0])
-    for idx in range(scanline.shape[0]):
-        n = int(idx + num_max_neighbors)
+                        max_num_neighbors: int) -> np.ndarray:
+    roughness = np.zeros(scanline_xyz.shape[0])
+    for idx in range(scanline_xyz.shape[0]):
+        n = int(idx + max_num_neighbors)
         roughness[idx] = np.nanvar(calculate_distances_point_lines(center_point=padded_scanline[n], 
                                                                    points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
                                                                    points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
@@ -326,21 +230,6 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                    expected_value_col: int,
                                    rho_col: int,
                                    least_squares_method: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Calculates the segmentation metrics (rho_diff, slope and curvature) for each scanline.
-
-    Parameters:
-    pcd (np.ndarray): The point cloud array.
-    x_col (int): The column index containing the x coordinates.
-    y_col (int): The column index containing the y coordinates.
-    z_col (int): The column index containing the z coordinates.
-    sort_col (int): The column index to sort the pcd by.
-    scanline_id_col (int): The column index to extract the scanline ids from.
-    rho_col (int): The column index containing the rho values.
-
-    Returns:
-    tuple: A tuple of three arrays, each containing one of the segmentation metrics (rho_diff, slope, curvature, sorted pcd) for the pcd.
-    """
     # Create empty arrays to store the segmentation metrics
     rho_diff = np.zeros(pcd.shape[0])
     slope = np.zeros(pcd.shape[0])
@@ -354,6 +243,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                                   lower_boundary=scanline_intervals[i], 
                                                   upper_boundary=scanline_intervals[i+1])
         
+        # Calculate the density and the number of neighbors for each point in the scanline
         density = 1 / scanline[:, expected_value_col]
         
         # Smoothing case
@@ -368,30 +258,44 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         # No smoothing case
         #k_neighbors = np.ones(scanline.shape[0])
         
+        # Extract the x, y, z coordinates from the scanline (numba does not support indexing with multiple columns)
+        x = scanline[:, x_col]
+        y = scanline[:, y_col]
+        z = scanline[:, z_col]
+        
+        # Merge the x, y, z coordinates into a single array
+        scanline_xyz = np.column_stack((x, y, z))
+        
+        # Calculate the maximum number of neighbors to consider
+        max_num_neighbors = int(np.max(k_neighbors))  
+        
+        # Pad the array at the beginning and end
+        padded_scanline = pad_reflect(scanline_xyz, max_num_neighbors)
+        
         # Calculate the rho_diff, slope, curvature, and roughness for the current scanline
         rho_diff_i = calculate_rho_diff(scanline, 
-                                        col=rho_col)
+                                        rho_col=rho_col)
         
         if least_squares_method:
             slope_i = calculate_slope_least_squares(scanline=scanline,
                                                     num_neighbors=k_neighbors,
+                                                    max_num_neighbors=max_num_neighbors,
                                                     rho_col=rho_col,
                                                     z_col=z_col)
         else:
-            slope_i = calculate_slope(scanline=scanline, 
+            slope_i = calculate_slope(scanline_xyz=scanline, 
+                                      padded_scanline=padded_scanline,
                                       num_neighbors=k_neighbors,
-                                      x_col=x_col, 
-                                      y_col=y_col, 
-                                      z_col=z_col)
+                                      max_num_neighbors=max_num_neighbors)
         
         curvature_i = calculate_curvature(slope_arr=slope_i, 
-                                          num_neighbors=k_neighbors)
-        
-        roughness_i = calculate_roughness(scanline=scanline, 
                                           num_neighbors=k_neighbors,
-                                          x_col=x_col,
-                                          y_col=y_col,
-                                          z_col=z_col)
+                                          max_num_neighbors=max_num_neighbors)
+        
+        roughness_i = calculate_roughness(scanline_xyz=scanline_xyz, 
+                                          padded_scanline=padded_scanline,
+                                          num_neighbors=k_neighbors,
+                                          max_num_neighbors=max_num_neighbors)
         
         rho_diff[scanline_indices] = rho_diff_i
         slope[scanline_indices] = slope_i
@@ -417,23 +321,6 @@ def scanline_segmentation(pcd: np.ndarray,
                           expected_value_factor: int,
                           slope_threshold: float,
                           curvature_threshold: float) -> np.ndarray:
-    """
-    Segments a point cloud based on rho difference, slope and curvature conditions.
-
-    Parameters:
-    pcd (np.ndarray): The point cloud array.
-    expected_value_col (int): The index of the column in the pcd that contains the expected rho values.
-    rho_diff_col (int): The index of the column in the pcd that contains the rho_diff values.
-    slope_col (int): The index of the column in the pcd that contains the slope values.
-    curvature_col (int): The index of the column in the pcd that contains the curvature values.
-    expected_value_factor (int): The factor to multiply the expected value with.
-    slope_threshold (float): The threshold for the slope.
-    curvature_threshold (float): The threshold for the curvature.
-
-    Returns:
-    np.ndarray: An array of the segment ids for each point in the pcd.
-    """
-    
     # Initialize an array of zeros to store the segment ids
     segment_ids = np.zeros(pcd.shape[0])
     
