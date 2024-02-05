@@ -48,14 +48,14 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
     else:
         logger.info('Calculating the max point-to-point distances...')
         
-    max_distances, pcd_centered, normals = sce.kdtree_maxdist_normals(cfg=cfg,
+    max_distances, pcd_xyz_centered, normals = sce.kdtree_maxdist_normals(cfg=cfg,
                                                                       pcd=pcd[:, (cfg.pcd_col.x,
                                                                                   cfg.pcd_col.y,
                                                                                   cfg.pcd_col.z)],
                                                                       num_nearest_neighbors=cfg.sce.k_nn)
     
     normals_xyz, normals = sce.align_normals_with_scanner_pos(cfg=cfg,
-                                                              pcd=pcd_centered, 
+                                                              pcd=pcd_xyz_centered, 
                                                               normals=normals)
 
     # Bin the data

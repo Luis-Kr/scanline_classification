@@ -203,22 +203,22 @@ def compute_normals_numba(indices, point_clouds):
 
 
 def kdtree_maxdist_normals(cfg, pcd, num_nearest_neighbors=4):
-    pcd_centered = pcd[:,:3] - np.mean(pcd[:,:3], axis=0)
+    pcd_xyz_centered = pcd[:,:3] - np.mean(pcd[:,:3], axis=0)
     
     # Build a k-d tree from point_clouds for efficient nearest neighbor search
-    kdtree = cKDTree(pcd_centered)
+    kdtree = cKDTree(pcd_xyz_centered)
 
     # Query the k-d tree for the num_nearest_neighbors nearest neighbors of each point in point_clouds
-    distances, indices = kdtree.query(pcd_centered, k=num_nearest_neighbors, workers=-1)
+    distances, indices = kdtree.query(pcd_xyz_centered, k=num_nearest_neighbors, workers=-1)
     
     # Calculate max of num_nearest_neighbors nearest distances, excluding self (index 0)
     max_distances = np.max(distances[:, 1:num_nearest_neighbors], axis=1)
     
     if not cfg.sce.calculate_normals:
-        return max_distances, pcd_centered, None
+        return max_distances, pcd_xyz_centered, None
 
     # Select the point clouds corresponding to the indices
-    point_clouds = pcd_centered[indices]
+    point_clouds = pcd_xyz_centered[indices]
 
     # Compute the normals of the selected point clouds
     normals = compute_normals_numba(indices, point_clouds)
@@ -227,7 +227,7 @@ def kdtree_maxdist_normals(cfg, pcd, num_nearest_neighbors=4):
     indices = None
     point_clouds = None
 
-    return max_distances, pcd_centered, normals
+    return max_distances, pcd_xyz_centered, normals
 
 
 def align_normals_with_scanner_pos(cfg, pcd, normals):
