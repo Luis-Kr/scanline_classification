@@ -3,6 +3,8 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
+from sklearn.utils import class_weight
+import numpy as np
 import joblib
 from pathlib import Path
 import sys
@@ -44,14 +46,20 @@ def load_data(file_paths):
     return pd.concat(data_frames, axis=0)
 
 
-def train_and_test_model(X_train, y_train, X_test, y_test, model_path, logger):
+def train_and_test_model(X_train, y_train, X_test, y_test, model_path, weights_dict, logger):
     # Set up random forest classifier
     logger.info("Setting up random forest classifier...")
+    
     # Load the already trained model if it exists
     if model_path.exists():
         rf = joblib.load(model_path)
     else:
-        rf = RandomForestClassifier(n_estimators=100, random_state=42)
+        rf = RandomForestClassifier(n_estimators=150, 
+                                    criterion='gini',
+                                    max_features='sqrt',
+                                    class_weight=weights_dict,
+                                    n_jobs=-1,
+                                    random_state=42)
 
     # Train the model
     logger.info("Training the model...")
@@ -70,17 +78,39 @@ def train_and_test_model(X_train, y_train, X_test, y_test, model_path, logger):
     logger.info("Model saved successfully.")
 
 
+def create_class_weights(labels):
+    """
+    Create class weights for the given labels.
+
+    Args:
+        y_train (np.ndarray): The labels to create class weights for.
+
+    Returns:
+        dict: A dictionary containing the class weights.
+    """
+    unique_labels = np.unique(labels)
+    class_weights = class_weight.compute_class_weight('balanced', 
+                                                      classes=unique_labels, 
+                                                      y=labels)
+    weights_dict = {class_label: weight for class_label, weight in zip(unique_labels, class_weights)}
+    return weights_dict
+
+
 if __name__ == "__main__":
     # Load training data
-    data_dir = Path(root_dir) / "data/06_subsampling/SiteA_Scans_Global_I_RGB_RHV"
-    model_path = Path(root_dir) / "data/models/random_forest_SiteA.joblib"
+    data_dir = Path(root_dir) / "data/06_subsampling/ScanPos_Relocated"
+    model_path = Path(root_dir) / "data/models/random_forest_SiteA_ScanPosRelocated_ClassWeights.joblib"
     data_paths = list(data_dir.glob('*.txt'))
     data = load_data(data_paths)
     
-
     # Split data into features and labels
     X = data.iloc[:, 9:-1].values
     y = data.iloc[:, -1].values
+    
+    # Create class weights
+    weights_dict = create_class_weights(labels=y)
+    
+    print(f'Class weights: {weights_dict}')
 
     # Split data into training and testing sets using 5-fold cross validation
     kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
@@ -95,4 +125,4 @@ if __name__ == "__main__":
         logger.info(f"X_test shape (validation): {X_test.shape}")
         logger.info(f"y_test shape (validation): {y_test.shape}")
 
-        train_and_test_model(X_train, y_train, X_test, y_test, model_path, logger)
+        train_and_test_model(X_train, y_train, X_test, y_test, model_path, weights_dict, logger)
