@@ -30,8 +30,6 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
                                             horiz_angle=cfg.pcd_col.horiz_angle,
                                             vert_angle=cfg.pcd_col.vert_angle)
     
-    print(knickpoints.shape)
-    
     # Extract the scanlines
     logger.info('Extracting the scanlines...')
     
@@ -48,14 +46,14 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
     else:
         logger.info('Calculating the max point-to-point distances...')
         
-    max_distances, pcd_xyz_centered, normals = sce.kdtree_maxdist_normals(cfg=cfg,
-                                                                      pcd=pcd[:, (cfg.pcd_col.x,
-                                                                                  cfg.pcd_col.y,
-                                                                                  cfg.pcd_col.z)],
-                                                                      num_nearest_neighbors=cfg.sce.k_nn)
+    max_distances, pcd_xyz_scanpos_centered, normals = sce.kdtree_maxdist_normals(cfg=cfg,
+                                                                                  pcd=pcd[:, (cfg.pcd_col.x,
+                                                                                              cfg.pcd_col.y,
+                                                                                              cfg.pcd_col.z)],
+                                                                                  num_nearest_neighbors=cfg.sce.k_nn)
     
     normals_xyz, normals = sce.align_normals_with_scanner_pos(cfg=cfg,
-                                                              pcd=pcd_xyz_centered, 
+                                                              pcd=pcd_xyz_scanpos_centered, 
                                                               normals=normals)
 
     # Bin the data
@@ -63,18 +61,22 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
                                     bin_size=cfg.sce.bin_size)
 
     # Calculate binned distances
-    binned_distances = sce.calculate_binned_distances(max_distances=max_distances, 
-                                                      binned_data=binned_pcd, 
-                                                      bins=bins)
+    binned_distances, binned_distances_std = sce.calculate_binned_distances(max_distances=max_distances, 
+                                                                            binned_data=binned_pcd, 
+                                                                            bins=bins)
 
     # Interpolate distances
-    binned_distances_interpolated = sce.interpolate_distances(binned_distances=binned_distances)
+    binned_distances_interpolated = sce.interpolate_distances(binned_distances)
+    binned_distances_std_interpolated = sce.interpolate_distances(binned_distances_std)
+    
+    print(f'Mean distance std: {np.mean(binned_distances_std_interpolated)}')
 
     # Add expected value distance to the point cloud data
     logger.info('Adding the expected value of distance to the point cloud data...')
     pcd = sce.add_expected_value_distance(pcd=pcd, 
                                           binned_pcd=binned_pcd, 
-                                          binned_distance_interp=binned_distances_interpolated)
+                                          binned_distance_interp=binned_distances_interpolated,
+                                          binned_distances_interp_std=binned_distances_std_interpolated)
 
     # Append the scanlines to the pcd
     pcd = sce.append_scanlines(pcd, scanlines)
@@ -85,11 +87,12 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
         np.savetxt(Path(root_dir) / 'data/04_scanline_extraction/SiteA_Scans_Global_I_RGB_RHV/Scan01_with_scanlineID.asc', 
                    pcd, fmt=cfg.sce.fmt, delimiter=' ')
     
-    return pcd, normals_xyz, normals
+    return pcd, pcd_xyz_scanpos_centered, normals_xyz, normals
 
 
 def scanline_segmentation(cfg: DictConfig, 
                           pcd: np.ndarray, 
+                          pcd_xyz_scanpos_centered: np.ndarray,
                           logger: logging.Logger, 
                           normals_xyz: np.ndarray, 
                           normals: np.ndarray):    
@@ -122,6 +125,8 @@ def scanline_segmentation(cfg: DictConfig,
     logger.info('Scanline segmentation...')
     segment_ids = scs.scanline_segmentation(pcd_sorted,
                                             expected_value_col=cfg.pcd_col.expected_value,
+                                            expected_value_std_col=cfg.pcd_col.expected_value_std,
+                                            std_multiplier=cfg.scs.std_multiplier,
                                             rho_diff_col=cfg.pcd_col.rho_diff,
                                             slope_col=cfg.pcd_col.slope,
                                             curvature_col=cfg.pcd_col.curvature,
@@ -140,10 +145,21 @@ def scanline_segmentation(cfg: DictConfig,
     # Concatenate pcd_sorted_left, segment_ids, and pcd_sorted_right
     pcd_segmented = np.c_[pcd_sorted_left, segment_ids, pcd_sorted_right]
     
+    if cfg.sce.relocate_origin:
+        pcd_segmented = scs.recalculate_rho(cfg=cfg, 
+                                            pcd=pcd_segmented, 
+                                            pcd_xyz_scanpos_centered=pcd_xyz_scanpos_centered)
+        
+    print(f'PCD segmented shape: {pcd_segmented.shape}')
+    
     if cfg.scs.save_pcd:
         
         segmentation_path = Path(*[part if part != '03_labeled' else '05_segmentation' for part in Path(cfg.pcd_path).parts])
-        segmentation_path = segmentation_path.with_stem(segmentation_path.stem + "_Segmentation")
+        
+        if not cfg.sce.relocate_origin:
+            segmentation_path = segmentation_path.with_stem(segmentation_path.stem + "_Segmentation")
+        else:
+            segmentation_path = segmentation_path.with_stem(segmentation_path.stem + f"_Segmentation_ScanPosRelocated{cfg.sce.z_offset}m")
         
         if not cfg.sce.calculate_normals:
             logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
@@ -205,7 +221,11 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
     if cfg.scsb.save_pcd:
         
         segmentation_path = Path(*[part if part != '03_labeled' else '06_subsampling' for part in Path(cfg.pcd_path).parts])
-        segmentation_path = segmentation_path.with_stem(segmentation_path.stem + "_Subsampling")
+        
+        if not cfg.sce.relocate_origin:
+            segmentation_path = segmentation_path.with_stem(segmentation_path.stem + "_Subsampling")
+        else:
+            segmentation_path = segmentation_path.with_stem(segmentation_path.stem + f"_Subsampling_ScanPosRelocated{cfg.sce.z_offset}m")
         
         if cfg.sce.calculate_normals:
             logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
@@ -234,12 +254,13 @@ def main(cfg: DictConfig):
         pass
     
     # PCD preprocessing
-    pcd, normals_xyz, normals=pcd_preprocessing(cfg=cfg, 
-                                                logger=logger)
+    pcd, pcd_xyz_scanpos_centered, normals_xyz, normals=pcd_preprocessing(cfg=cfg, 
+                                                                          logger=logger)
     
     # PCD scanline segmentation
     pcd_segmented=scanline_segmentation(cfg=cfg, 
                                         pcd=pcd, 
+                                        pcd_xyz_scanpos_centered=pcd_xyz_scanpos_centered,
                                         logger=logger, 
                                         normals_xyz=normals_xyz, 
                                         normals=normals)

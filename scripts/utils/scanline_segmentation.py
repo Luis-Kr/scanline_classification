@@ -40,6 +40,16 @@ def get_scanline(pcd: np.ndarray,
     return scanline, scanline_indices
 
 
+def recalculate_rho(cfg, pcd, pcd_xyz_scanpos_centered):
+    # Calculate the rho values based on the x, y, z coordinates
+    rho = np.sqrt(pcd_xyz_scanpos_centered[:,0]**2 + pcd_xyz_scanpos_centered[:,1]**2 + pcd_xyz_scanpos_centered[:,2]**2)
+    
+    # Replace the rho values in the pcd
+    pcd[:, cfg.pcd_col.rho] = rho
+    
+    return pcd
+
+
 @njit()
 def calculate_rho_diff(pcd: np.ndarray, 
                        rho_col: int) -> np.ndarray:
@@ -314,6 +324,8 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
 @njit(parallel=True)
 def scanline_segmentation(pcd: np.ndarray, 
                           expected_value_col: int, 
+                          expected_value_std_col: int,
+                          std_multiplier: int,
                           rho_diff_col: int, 
                           slope_col: int, 
                           curvature_col: int,
@@ -324,7 +336,7 @@ def scanline_segmentation(pcd: np.ndarray,
     segment_ids = np.zeros(pcd.shape[0])
     
     # Identify the segments based on the conditions
-    segments = np.where((pcd[:,rho_diff_col] > pcd[:,expected_value_col]*expected_value_factor) | 
+    segments = np.where((pcd[:,rho_diff_col] > (pcd[:,expected_value_col] + pcd[:,expected_value_std_col]*std_multiplier)) | 
                         (pcd[:,curvature_col] > curvature_threshold))[0] #(pcd[:,slope_col] < slope_threshold) |
     
     # Assign the segment ids to the points

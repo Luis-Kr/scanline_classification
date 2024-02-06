@@ -112,30 +112,22 @@ def bin_data(data: np.ndarray,
 def calculate_binned_distances(max_distances: np.ndarray, 
                                binned_data: np.ndarray, 
                                bins: np.ndarray) -> np.ndarray:
-    """
-    Calculates the max distance for each bin.
-
-    Parameters:
-    mean_distances (np.ndarray): The mean distances to calculate the binned distances from.
-    binned_data (np.ndarray): The binned data.
-    bins (np.ndarray): The bins.
-
-    Returns:
-    np.ndarray: The binned distances.
-    """
     # Initialize array for binned distances
     binned_distances = np.zeros(bins.shape[0])
+    binned_distances_std = np.zeros(bins.shape[0])
     
     # For each bin, calculate mean distance
     for i in range(bins.shape[0]):
         bin_distance = max_distances[binned_data == i]
         if len(bin_distance) > 0:
             binned_distances[i] = np.max(bin_distance)
+            binned_distances_std[i] = np.std(bin_distance)
     
     # Replace zero distances with NaN
     binned_distances[binned_distances == 0] = np.nan
+    binned_distances_std[binned_distances_std == 0] = np.nan
     
-    return binned_distances
+    return binned_distances, binned_distances_std
 
 
 def interpolate_distances(binned_distances: np.ndarray) -> np.ndarray:
@@ -162,7 +154,8 @@ def interpolate_distances(binned_distances: np.ndarray) -> np.ndarray:
 
 def add_expected_value_distance(pcd: np.ndarray, 
                                 binned_pcd: np.ndarray, 
-                                binned_distance_interp: np.ndarray) -> np.ndarray:
+                                binned_distance_interp: np.ndarray,
+                                binned_distances_interp_std: np.ndarray) -> np.ndarray:
     """
     Adds the expected value of distance to the point cloud data.
 
@@ -176,9 +169,10 @@ def add_expected_value_distance(pcd: np.ndarray,
     """
     # Calculate the expected value of distance for each point
     expected_value_distance = binned_distance_interp[binned_pcd-1]
+    expected_value_distance_std = binned_distances_interp_std[binned_pcd-1]
 
     # Add the expected value of distance to the point cloud data
-    pcd = np.c_[pcd, expected_value_distance]
+    pcd = np.c_[pcd, expected_value_distance, expected_value_distance_std]
     
     return pcd
 
@@ -203,7 +197,8 @@ def compute_normals_numba(indices, point_clouds):
 
 
 def kdtree_maxdist_normals(cfg, pcd, num_nearest_neighbors=4):
-    pcd_xyz_centered = pcd[:,:3] - np.mean(pcd[:,:3], axis=0)
+    scanner_pos = np.mean(pcd[:,:3], axis=0)
+    pcd_xyz_centered = pcd[:,:3] - scanner_pos
     
     # Build a k-d tree from point_clouds for efficient nearest neighbor search
     kdtree = cKDTree(pcd_xyz_centered)
@@ -214,20 +209,22 @@ def kdtree_maxdist_normals(cfg, pcd, num_nearest_neighbors=4):
     # Calculate max of num_nearest_neighbors nearest distances, excluding self (index 0)
     max_distances = np.max(distances[:, 1:num_nearest_neighbors], axis=1)
     
+    pcd_xyz = pcd_xyz_centered
+    
+    if cfg.sce.relocate_origin:
+        scanner_pos[2] += cfg.sce.z_offset
+        pcd_xyz = pcd[:,:3] - scanner_pos
+    
     if not cfg.sce.calculate_normals:
-        return max_distances, pcd_xyz_centered, None
+        return max_distances, pcd_xyz, None
 
     # Select the point clouds corresponding to the indices
     point_clouds = pcd_xyz_centered[indices]
 
     # Compute the normals of the selected point clouds
     normals = compute_normals_numba(indices, point_clouds)
-
-    # Clear the indices to free up memory
-    indices = None
-    point_clouds = None
-
-    return max_distances, pcd_xyz_centered, normals
+    
+    return max_distances, pcd_xyz, normals
 
 
 def align_normals_with_scanner_pos(cfg, pcd, normals):
