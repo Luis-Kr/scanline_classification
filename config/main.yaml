@@ -1,7 +1,7 @@
 defaults:
   - _self_
 
-pcd_path: data/03_labeled/SiteA_Scans_Global_I_RGB_RHV/SiteA_RHV_01_Labeled.txt
+pcd_path: data/03_labeled/SiteD_Scans_Global_I_RGB_RHV/SiteD_RHV_01_Labeled.txt
 
 pcd_col:
   x: 0
@@ -17,41 +17,45 @@ pcd_col:
   point_counter: 10
   label: 11
   expected_value: 12
-  scanline_id: 13
-  rho_diff: 14
-  slope: 15
-  curvature: 16
-  roughness: 17
-  segment_ids: 18
-  nx_xyz: 19
-  ny_xyz: 20
-  nz_xyz: 21
-  nx: 22
-  ny: 23
-  nz: 24
+  expected_value_std: 13
+  scanline_id: 14
+  rho_diff: 15
+  slope: 16
+  curvature: 17
+  roughness: 18
+  segment_ids: 19
+  nx_xyz: 20
+  ny_xyz: 21
+  nz_xyz: 22
+  nx: 23
+  ny: 24
+  nz: 25
 
 sce:
   threshold: 100
   bin_size: 0.5
   k_nn: 16
+  z_offset: 30
+  relocate_origin: True
   calculate_normals: False
-  fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %u"
+  fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %1.6f %u"
   save_pcd: False
 
 scs:
   expected_value_factor: 50
   slope_threshold: 0.25
   curvature_threshold: 30
+  std_multiplier: 100
   least_squares_method: True
-  fmt_normals:  "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %u %1.4f %1.4f %1.6f %1.8f %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
-  fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %u %1.4f %1.4f %1.6f %1.8f %u %1.4f %1.4f %1.4f"
-  save_pcd: True
+  fmt_normals:  "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %1.6f %u %1.4f %1.4f %1.6f %1.8f %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
+  fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %1.6f %u %1.4f %1.4f %1.6f %1.8f %u %1.4f %1.4f %1.4f"
+  save_pcd: False
 
 scsb:
-  #fmt_normals:  "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
-  fmt_normals:   "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.6f %1.6f %1.6f %1.6f %1.6f %1.6f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u"
-  #fmt:          "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
-  fmt:           "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.6f %1.6f %1.6f %1.6f %1.6f %1.6f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u"
+  #fmt_normals: "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
+  fmt_normals: "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.6f %1.6f %1.6f %1.6f %1.6f %1.6f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u"
+  #fmt: "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f"
+  fmt: "%1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.6f %1.6f %1.6f %1.6f %1.6f %1.6f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %1.4f %u"
   save_pcd: False
 
 

@@ -1,0 +1,31 @@
+Root directory: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation
+Loading data
+Traceback (most recent call last):
+  File "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/scripts/classification/RF_training.py", line 78, in <module>
+    data = load_data(data_paths)
+  File "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/scripts/classification/RF_training.py", line 44, in load_data
+    return pd.concat(data_frames, axis=0)
+  File "/Users/luiskremer/miniconda3/envs/scanline_segmentation/lib/python3.10/site-packages/pandas/core/reshape/concat.py", line 380, in concat
+    op = _Concatenator(
+  File "/Users/luiskremer/miniconda3/envs/scanline_segmentation/lib/python3.10/site-packages/pandas/core/reshape/concat.py", line 443, in __init__
+    objs, keys = self._clean_keys_and_objs(objs, keys)
+  File "/Users/luiskremer/miniconda3/envs/scanline_segmentation/lib/python3.10/site-packages/pandas/core/reshape/concat.py", line 505, in _clean_keys_and_objs
+    raise ValueError("No objects to concatenate")
+ValueError: No objects to concatenate
+Root directory: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation
+Loading data
+Root directory: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation
+Loading data
+Traceback (most recent call last):
+  File "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/scripts/classification/RF_training.py", line 111, in <module>
+    train_and_test_model(X_train, y_train, X_test, y_test, model_path, logger)
+  File "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/scripts/classification/RF_training.py", line 71, in train_and_test_model
+    rf.fit(X_train, y_train)
+  File "/Users/luiskremer/miniconda3/envs/scanline_segmentation/lib/python3.10/site-packages/sklearn/base.py", line 1145, in wrapper
+    estimator._validate_params()
+  File "/Users/luiskremer/miniconda3/envs/scanline_segmentation/lib/python3.10/site-packages/sklearn/base.py", line 638, in _validate_params
+    validate_parameter_constraints(
+  File "/Users/luiskremer/miniconda3/envs/scanline_segmentation/lib/python3.10/site-packages/sklearn/utils/_param_validation.py", line 96, in validate_parameter_constraints
+    raise InvalidParameterError(
+sklearn.utils._param_validation.InvalidParameterError: The 'class_weight' parameter of RandomForestClassifier must be a str among {'balanced', 'balanced_subsample'}, an instance of 'dict', an instance of 'list' or None. Got array([5.63855345, 1.01544495, 0.37784132, 1.28288241, 0.7764453 ,
+       8.07555137]) instead.

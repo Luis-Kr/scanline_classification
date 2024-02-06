@@ -3,6 +3,7 @@ from typing import Tuple
 from numba import njit, prange, float64, int64
 from numba.typed import Dict
 
+
 @njit()
 def segment_subsampling(pcd: np.ndarray, 
                         segment_indices: int,
