@@ -68,8 +68,6 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
     # Interpolate distances
     binned_distances_interpolated = sce.interpolate_distances(binned_distances)
     binned_distances_std_interpolated = sce.interpolate_distances(binned_distances_std)
-    
-    print(f'Mean distance std: {np.mean(binned_distances_std_interpolated)}')
 
     # Add expected value distance to the point cloud data
     logger.info('Adding the expected value of distance to the point cloud data...')
@@ -149,8 +147,7 @@ def scanline_segmentation(cfg: DictConfig,
         pcd_segmented = scs.recalculate_rho(cfg=cfg, 
                                             pcd=pcd_segmented, 
                                             pcd_xyz_scanpos_centered=pcd_xyz_scanpos_centered)
-        
-    print(f'PCD segmented shape: {pcd_segmented.shape}')
+
     
     if cfg.scs.save_pcd:
         

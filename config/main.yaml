@@ -36,7 +36,7 @@ sce:
   bin_size: 0.5
   k_nn: 16
   z_offset: 30
-  relocate_origin: True
+  relocate_origin: False
   calculate_normals: False
   fmt: "%1.4f %1.4f %1.4f %1.6f %u %u %u %1.4f %1.6f %1.6f %u %u %1.6f %1.6f %u"
   save_pcd: False
