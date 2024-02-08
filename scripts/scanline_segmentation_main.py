@@ -5,6 +5,9 @@ import utils.scanline_extraction as sce
 import utils.scanline_segmentation as scs
 import utils.scanline_subsampling as scsb
 import utils.logger as lgr
+from typing import List, Dict, Tuple
+import sys
+import numba
 
 # Hydra and OmegaConf imports
 import hydra
@@ -16,7 +19,55 @@ from omegaconf import DictConfig
 root_dir = Path(__file__).parent.parent.absolute()
 
 
-def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
+def prepare_attributes_and_format(cfg: DictConfig, 
+                                  logger: logging.Logger) -> Tuple[str, str, str, List[int], List[str]]:
+    
+    logger.info('Preparing the attributes...')
+    
+    def get_column_indices(attributes: List[str], 
+                           pcd_col: Dict[str, int], 
+                           pcd_col_fmt: Dict[str, str]) -> Tuple[List[int], str]:
+        try:
+            column_indices = [pcd_col[attribute.lower()] for attribute in attributes]
+            column_fmt = [pcd_col_fmt[attribute.lower()] for attribute in attributes]
+            return column_indices, column_fmt
+        except KeyError as e:
+            raise KeyError(f"The attribute '{e.args[0]}' is not found in the dictionary. Please check the attribute names.")
+
+    # fmt scanline extraction
+    fmt_sce = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values())[:15])
+    
+    # fmt scanline segmentation
+    fmt_scs = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values()))
+    
+    # fmt scanline subsampling
+    column_indices, column_fmt = get_column_indices(attributes=cfg.attributes, 
+                                                    pcd_col=cfg.pcd_col,
+                                                    pcd_col_fmt=cfg.pcd_col_fmt)
+    
+    fmt_scsb = " ".join(fmt for fmt in column_fmt for _ in range(7)) + " " + "%u" #7 because of the number of statistics
+    fmt_scsb = " ".join(["%1.4f"] * len(cfg.xyz_attributes)) + " " + fmt_scsb
+
+    attribute_statistics = [f"{attribute}_{statistic}" for attribute in cfg.attributes for statistic in cfg.statistics]
+    attribute_statistics = cfg.xyz_attributes + attribute_statistics + ["label"]
+
+    return fmt_sce, fmt_scs, fmt_scsb, column_indices, attribute_statistics
+
+
+def check_attributes_and_normals(cfg: DictConfig):
+    if cfg.sce.calculate_normals == False and all(x in cfg.attributes for x in ["nx", "ny", "nz"]):
+        sys.exit("""Error: The attributes contain 'nx', 'ny', and 'nz'. 
+                 However, the calculate_normals is set to False. 
+                 Please set the calculate_normals to True or remove 'nx', 'ny', and 'nz' from the attributes.""")
+    elif cfg.sce.calculate_normals == True and not all(x in cfg.attributes for x in ["nx", "ny", "nz"]):
+        sys.exit("""Error: The attributes do not contain 'nx', 'ny', and 'nz'. \n
+                    However, the calculate_normals is set to True. \n
+                    Please set the calculate_normals to False or add 'nx', 'ny', and 'nz' to the attributes.""")
+
+
+def pcd_preprocessing(cfg: DictConfig, 
+                      fmt_sce: str,
+                      logger: logging.Logger):
     # Read the pcd file
     logger.info(f'Reading the point cloud: {Path(root_dir) / cfg.pcd_path}')
     
@@ -80,15 +131,15 @@ def pcd_preprocessing(cfg: DictConfig, logger: logging.Logger):
     pcd = sce.append_scanlines(pcd, scanlines)
     
     if cfg.sce.save_pcd:
-        # Save the scanlines
-        logger.info(f'Saving the scanlines: {Path(root_dir) / "data/raw_plus_scanline_extraction/SiteA_Scans_Global_I_RGB_RHV/Scan01_with_scanlineID.asc"}')
-        np.savetxt(Path(root_dir) / 'data/04_scanline_extraction/SiteA_Scans_Global_I_RGB_RHV/Scan01_with_scanlineID.asc', 
-                   pcd, fmt=cfg.sce.fmt, delimiter=' ')
+        sce_path = Path(*[part if part != '03_labeled' else '04_scanline_extraction' for part in Path(cfg.pcd_path).parts])
+        logger.info(f'Saving the scanlines: {Path(root_dir) / sce_path}')
+        np.savetxt(Path(root_dir) / sce_path, pcd, fmt=fmt_sce, delimiter=' ')
     
     return pcd, pcd_xyz_scanpos_centered, normals_xyz, normals
 
 
 def scanline_segmentation(cfg: DictConfig, 
+                          fmt_scs: str,
                           pcd: np.ndarray, 
                           pcd_xyz_scanpos_centered: np.ndarray,
                           logger: logging.Logger, 
@@ -128,7 +179,6 @@ def scanline_segmentation(cfg: DictConfig,
                                             rho_diff_col=cfg.pcd_col.rho_diff,
                                             slope_col=cfg.pcd_col.slope,
                                             curvature_col=cfg.pcd_col.curvature,
-                                            expected_value_factor=cfg.scs.expected_value_factor,
                                             slope_threshold=cfg.scs.slope_threshold,
                                             curvature_threshold=cfg.scs.curvature_threshold)
     
@@ -160,25 +210,28 @@ def scanline_segmentation(cfg: DictConfig,
         
         if not cfg.sce.calculate_normals:
             logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
-            np.savetxt(Path(root_dir) / segmentation_path, 
-                       pcd_segmented, fmt=cfg.scs.fmt, delimiter=' ')
+            np.savetxt(Path(root_dir) / segmentation_path, pcd_segmented, fmt=fmt_scs.rsplit(' ', 3)[0], delimiter=' ')
         else:
             logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
-            np.savetxt(Path(root_dir) / segmentation_path, 
-                    pcd_segmented, fmt=cfg.scs.fmt_normals, delimiter=' ')
+            np.savetxt(Path(root_dir) / segmentation_path, pcd_segmented, fmt=fmt_scs, delimiter=' ')
     
     return pcd_segmented
 
 
 
-def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logger): 
+def scanline_subsampling(cfg: DictConfig, 
+                         fmt_scsb: str,
+                         column_indices: List[int],
+                         attribute_statistics: List[str],
+                         pcd: np.ndarray, 
+                         logger: logging.Logger): 
     logger.info('Scanline subsampling: Calculating the segment attributes...')
     
     # Get the unique segment classes
     segment_classes = np.array(list(set(pcd[:,cfg.pcd_col.segment_ids])))
     
     # Initialize the processed segments array
-    processed_segments = np.zeros((segment_classes.shape[0], 106))
+    processed_segments = np.zeros((segment_classes.shape[0], fmt_scsb.count("%")))
     
     # Get the number of points in each segment
     _, counts = np.unique(pcd[:,cfg.pcd_col.segment_ids], return_counts=True)
@@ -191,29 +244,9 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
                                                    x_col=cfg.pcd_col.x,
                                                    y_col=cfg.pcd_col.y,
                                                    z_col=cfg.pcd_col.z,
-                                                   height_col=cfg.pcd_col.z,
-                                                   intensity_col=cfg.pcd_col.intensity,
-                                                   red_col=cfg.pcd_col.red,
-                                                   green_col=cfg.pcd_col.green,
-                                                   blue_col=cfg.pcd_col.blue,
-                                                   rho_col=cfg.pcd_col.rho,
+                                                   column_indices=numba.typed.List(column_indices),
                                                    label_col=cfg.pcd_col.label,
-                                                   slope_col=cfg.pcd_col.slope,
-                                                   curvature_col=cfg.pcd_col.curvature,
-                                                   roughness_col=cfg.pcd_col.roughness,
-                                                   segment_ids_col=cfg.pcd_col.segment_ids,
-                                                   normals_xyz_col=np.array([cfg.pcd_col.nx_xyz,
-                                                                             cfg.pcd_col.ny_xyz,
-                                                                             cfg.pcd_col.nz_xyz]),
-                                                   normals_col=np.array([cfg.pcd_col.nx,
-                                                                         cfg.pcd_col.ny,
-                                                                         cfg.pcd_col.nz]))
-    
-    print(pcd_processed_segments.shape)
-    
-    if not cfg.sce.calculate_normals:
-        # remove the last 21 values from the processed segments
-        pcd_processed_segments = np.hstack((pcd_processed_segments[:, :-22],  pcd_processed_segments[:, -1:]))
+                                                   segment_ids_col=cfg.pcd_col.segment_ids)
     
     if cfg.scsb.save_pcd:
         
@@ -227,13 +260,11 @@ def scanline_subsampling(cfg: DictConfig, pcd: np.ndarray, logger: logging.Logge
         if cfg.sce.calculate_normals:
             logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
             print(pcd_processed_segments.shape)
-            np.savetxt(Path(root_dir) / segmentation_path, 
-                    pcd_processed_segments, fmt=cfg.scsb.fmt_normals, delimiter=' ')
+            np.savetxt(Path(root_dir) / segmentation_path, pcd_processed_segments, fmt=fmt_scsb, delimiter=' ')
         else:
             logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
             print(pcd_processed_segments.shape)
-            np.savetxt(Path(root_dir) / segmentation_path, 
-                    pcd_processed_segments, fmt=cfg.scsb.fmt, delimiter=' ')
+            np.savetxt(Path(root_dir) / segmentation_path, pcd_processed_segments, fmt=fmt_scsb, delimiter=' ')
 
 
 
@@ -250,12 +281,19 @@ def main(cfg: DictConfig):
     with open(Path(root_dir) / "data/logs/module_functionality.log", 'w'):
         pass
     
+    fmt_sce, fmt_scs, fmt_scsb, column_indices, attribute_statistics = prepare_attributes_and_format(cfg=cfg,
+                                                                                                     logger=logger)
+    
+    check_attributes_and_normals(cfg=cfg)
+    
     # PCD preprocessing
     pcd, pcd_xyz_scanpos_centered, normals_xyz, normals=pcd_preprocessing(cfg=cfg, 
+                                                                          fmt_sce=fmt_sce,
                                                                           logger=logger)
     
     # PCD scanline segmentation
     pcd_segmented=scanline_segmentation(cfg=cfg, 
+                                        fmt_scs=fmt_scs,
                                         pcd=pcd, 
                                         pcd_xyz_scanpos_centered=pcd_xyz_scanpos_centered,
                                         logger=logger, 
@@ -264,6 +302,9 @@ def main(cfg: DictConfig):
     
     # PCD scanline subsampling
     scanline_subsampling(cfg=cfg, 
+                         fmt_scsb=fmt_scsb,
+                         column_indices=column_indices,
+                         attribute_statistics=attribute_statistics,
                          pcd=pcd_segmented, 
                          logger=logger)
 
