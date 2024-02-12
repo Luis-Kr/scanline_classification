@@ -137,7 +137,7 @@ def slope_lstsq_local_neighborhood(points_left_side: np.ndarray,
     lstsq_solution, _, _, _ = np.linalg.lstsq(A, B)
     
     # Calculate the slope in degrees
-    slope_deg = np.rad2deg(np.abs(np.arctan(lstsq_solution[0])))
+    slope_deg = np.rad2deg(np.arctan(lstsq_solution[0]))
     
     return slope_deg
 
@@ -168,7 +168,6 @@ def calculate_slope_least_squares(scanline: np.ndarray,
     return slope
 
 
-
 @njit()
 def calculate_curvature(slope_arr: np.ndarray, 
                         num_neighbors: np.ndarray,
@@ -183,6 +182,29 @@ def calculate_curvature(slope_arr: np.ndarray,
         i = idx + max_num_neighbors
         curvature[idx] = np.mean(np.abs(pad_slope_arr[i+1:i+num_neighbors[idx]+1] - pad_slope_arr[i-num_neighbors[idx]:i][::-1]))
 
+    return curvature
+
+# np.gradient is not supported by numba (replacement)
+@njit()
+def numba_gradient(arr):
+    gradient = np.empty_like(arr)
+    gradient[0] = arr[1] - arr[0]
+    gradient[-1] = arr[-1] - arr[-2]
+    gradient[1:-1] = (arr[2:] - arr[:-2]) / 2
+    return gradient
+
+@njit()
+def calculate_curvature_gradient(slope_arr: np.ndarray, 
+                                 max_num_neighbors: int) -> np.ndarray:
+    # Pad the array at the beginning and end
+    pad_slope_arr = pad_reflect(slope_arr, max_num_neighbors)
+    
+    # Calculate the curvature 
+    curvature = numba_gradient(pad_slope_arr)
+    
+    # Trim the gradient array to the original shape
+    curvature = curvature[max_num_neighbors:-max_num_neighbors]
+    
     return curvature
 
 
@@ -238,6 +260,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                    z_col: int,
                                    expected_value_col: int,
                                    rho_col: int,
+                                   horiz_angle_col: int,
                                    least_squares_method: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     # Create empty arrays to store the segmentation metrics
     rho_diff = np.zeros(pcd.shape[0])
@@ -259,7 +282,8 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         k_neighbors = np.ceil(np.sqrt(density))
         
         # If k_neighbors is 1, set it to 2 to avoid too small neighborhoods
-        k_neighbors[k_neighbors == 1] = 2
+        #k_neighbors[k_neighbors == 1] = 2
+        k_neighbors *= 3
         
         # Smoothing with constant k
         #k_neighbors = np.ones(scanline.shape[0]) * 5
@@ -289,17 +313,21 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
             slope_i = calculate_slope_least_squares(scanline=scanline,
                                                     num_neighbors=k_neighbors,
                                                     max_num_neighbors=max_num_neighbors,
-                                                    rho_col=rho_col,
-                                                    z_col=z_col)
+                                                    rho_col=horiz_angle_col,
+                                                    z_col=rho_col)
         else:
             slope_i = calculate_slope(scanline_xyz=scanline, 
                                       padded_scanline=padded_scanline,
                                       num_neighbors=k_neighbors,
                                       max_num_neighbors=max_num_neighbors)
         
-        curvature_i = calculate_curvature(slope_arr=slope_i, 
-                                          num_neighbors=k_neighbors,
-                                          max_num_neighbors=max_num_neighbors)
+        # curvature_i = calculate_curvature(slope_arr=slope_i, 
+        #                                   num_neighbors=k_neighbors,
+        #                                   max_num_neighbors=max_num_neighbors)
+        
+        curvature_i = calculate_curvature_gradient(slope_arr=slope_i, 
+                                                   max_num_neighbors=max_num_neighbors)
+        
         
         roughness_i = calculate_roughness(scanline_xyz=scanline_xyz, 
                                           padded_scanline=padded_scanline,
@@ -310,13 +338,6 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         slope[scanline_indices] = slope_i
         curvature[scanline_indices] = curvature_i
         roughness[scanline_indices] = roughness_i
-                
-        # # Store the calculated metrics in the corresponding arrays
-        # for j in prange(scanline.shape[0]):
-        #     rho_diff[scanline_indices[j]] = rho_diff_i[j]
-        #     slope[scanline_indices[j]] = slope_i[j]
-        #     curvature[scanline_indices[j]] = curvature_i[j]
-        #     roughness[scanline_indices[j]] = roughness_i[j]
 
     return rho_diff, slope, curvature, roughness
 
@@ -329,7 +350,6 @@ def scanline_segmentation(pcd: np.ndarray,
                           rho_diff_col: int, 
                           slope_col: int, 
                           curvature_col: int,
-                          expected_value_factor: int,
                           slope_threshold: float,
                           curvature_threshold: float) -> np.ndarray:
     # Initialize an array of zeros to store the segment ids
@@ -337,7 +357,7 @@ def scanline_segmentation(pcd: np.ndarray,
     
     # Identify the segments based on the conditions
     segments = np.where((pcd[:,rho_diff_col] > (pcd[:,expected_value_col] + pcd[:,expected_value_std_col]*std_multiplier)) | 
-                        (pcd[:,curvature_col] > curvature_threshold))[0] #(pcd[:,slope_col] < slope_threshold) |
+                        (np.abs(pcd[:,curvature_col]) > curvature_threshold))[0] #(pcd[:,slope_col] < slope_threshold) |
     
     # Assign the segment ids to the points
     for i in prange(pcd.shape[0]):

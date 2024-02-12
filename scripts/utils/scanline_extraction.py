@@ -80,7 +80,7 @@ def create_kdtree(points: np.ndarray,
     distances, indices = tree.query(points, workers=-1, k=k)
     
     # Calculate max of 4 nearest distances, excluding self (index 0)
-    max_distances = np.max(distances[:, 1:5], axis=1)
+    max_distances = np.max(distances[:, 1:k], axis=1)
     
     # Replace zero distances with a small number
     #max_distances = np.where(max_distances == 0, 0.000001, max_distances)

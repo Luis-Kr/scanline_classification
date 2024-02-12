@@ -162,6 +162,7 @@ def scanline_segmentation(cfg: DictConfig,
                                                                                z_col=cfg.pcd_col.z,
                                                                                expected_value_col=cfg.pcd_col.expected_value,
                                                                                rho_col=cfg.pcd_col.rho,
+                                                                               horiz_angle_col=cfg.pcd_col.horiz_angle,
                                                                                least_squares_method=cfg.scs.least_squares_method)
     
     # Add the segmentation metrics to the point cloud data

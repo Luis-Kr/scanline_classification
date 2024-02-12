@@ -17,12 +17,11 @@ sce:
   save_pcd: False
 
 scs:
-  #expected_value_factor: 50
   slope_threshold: 0.25
-  curvature_threshold: 30
+  curvature_threshold: 45
   std_multiplier: 100
   least_squares_method: True
-  save_pcd: False
+  save_pcd: True
 
 scsb:
   save_pcd: True
@@ -67,7 +66,7 @@ pcd_col_fmt:
   horiz_angle: "%1.6f"
   vert_angle: "%1.6f"
   point_counter: "%u"
-  label: "%uf"
+  label: "%u"
   expected_value: "%1.4f"
   expected_value_std: "%1.4f"
   scanline_id: "%u"
