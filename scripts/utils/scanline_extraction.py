@@ -4,6 +4,34 @@ from numba import njit, prange, int64, float64
 from scipy.spatial import cKDTree
 
 
+def adjust_angles(phi_zf: np.ndarray,
+                  theta_zf: np.ndarray) -> tuple:
+    """
+    Adjusts theta and phi values for a Z+F point cloud.
+
+    Args:
+        theta_zf (np.ndarray): Array of theta values.
+        phi_zf (np.ndarray): Array of phi values.
+
+    Returns:
+        tuple: Adjusted theta and phi values.
+    """
+    # Flip theta values
+    theta_adjusted = 360 - theta_zf
+
+    # Get indices of theta values > 180
+    theta_adjusted_idx = np.where(theta_adjusted > 180)[0]
+
+    # Flip and shift theta values > 180
+    theta_adjusted[theta_adjusted_idx] *= -1
+    theta_adjusted[theta_adjusted_idx] += 360
+
+    # Adjust corresponding phi values
+    phi_zf[theta_adjusted_idx] -= 180
+
+    return phi_zf, theta_adjusted
+
+
 def sort_pcd(pcd: np.ndarray, 
              col: int = -2) -> np.ndarray:
     return pcd[pcd[:, col].argsort()]
