@@ -1,5 +1,6 @@
 defaults:
   - _self_
+  - a01_curvature: ../analysis/a01_curvature
 
 pcd_path: data/03_labeled/SiteD_Scans_Global_I_RGB_RHV/SiteD_RHV_01_Labeled.txt
 
@@ -24,7 +25,7 @@ scs:
   save_pcd: True
 
 scsb:
-  save_pcd: True
+  save_pcd: False
 
 pcd_col:
   x: 0
