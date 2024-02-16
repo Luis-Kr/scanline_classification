@@ -185,9 +185,9 @@ def process_segments(pcd: np.ndarray,
                                                                                             z_col=z_col)
         
         segment_attributes = calculate_segment_attributes(pcd=pcd,
-                                                              segment_indices=segment_indices,
-                                                              label_col=label_col,
-                                                              columns=column_indices)
+                                                          segment_indices=segment_indices,
+                                                          label_col=label_col,
+                                                          columns=column_indices)
         
         # Add the combined attributes to the array
         processed_segments[i] = combine_segment_attributes(xyz_segment_median_nn, 
