@@ -73,6 +73,10 @@ def pcd_preprocessing(cfg: DictConfig,
     
     pcd = np.loadtxt(Path(root_dir) / cfg.pcd_path, delimiter=' ')
     
+    logger.info('Adjusting the theta and phi values...')
+    pcd[:, cfg.pcd_col.horiz_angle], pcd[:, cfg.pcd_col.vert_angle] = sce.adjust_angles(phi_zf=pcd[:, cfg.pcd_col.horiz_angle],
+                                                                                        theta_zf=pcd[:, cfg.pcd_col.vert_angle])
+    
     # Compute the knickpoints
     logger.info('Computing the knickpoints...')
     
