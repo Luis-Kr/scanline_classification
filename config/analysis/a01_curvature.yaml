@@ -1,0 +1,3 @@
+pcd_path: data/05_segmentation/SiteD_Scans_Global_I_RGB_RHV/SiteD_RHV_01_Labeled_Segmentation_08_XYZ_k15.txt
+radius: [0.1, 0.25, 0.5, 1]
+output_path: data/analysis/a01_curvature/SiteD_RHV_01_A01_Roughness_XYZ_k15.txt
