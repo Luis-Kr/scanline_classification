@@ -95,7 +95,7 @@ def get_slope_3D(points_left_side: np.ndarray,
     # Calculate the slope in degrees
     local_slope_deg = np.rad2deg(local_slope)
     
-    return np.abs(local_slope_deg)
+    return local_slope_deg
 
 
 @njit()
@@ -145,12 +145,17 @@ def slope_lstsq_local_neighborhood(points_left_side: np.ndarray,
 @njit()
 def calculate_slope_least_squares(scanline: np.ndarray,
                                   num_neighbors: np.ndarray,
+                                  x_col: int,
+                                  y_col: int,
                                   max_num_neighbors: int,
                                   rho_col: int,
                                   z_col: int) -> np.ndarray:
     # Extract the rho and z coordinates from the scanline
     rho = scanline[:, rho_col]
-    z = scanline[:, z_col]
+    x = scanline[:, x_col]
+    y = scanline[:, y_col]
+    z = np.sqrt(x**2 + y**2)
+    #z = scanline[:, z_col]
     
     # Merge the rho and z-coordinates into a single array
     scanline_rho_z = np.column_stack((rho, z))
@@ -184,6 +189,7 @@ def calculate_curvature(slope_arr: np.ndarray,
 
     return curvature
 
+
 # np.gradient is not supported by numba (replacement)
 @njit()
 def numba_gradient(arr):
@@ -192,6 +198,7 @@ def numba_gradient(arr):
     gradient[-1] = arr[-1] - arr[-2]
     gradient[1:-1] = (arr[2:] - arr[:-2]) / 2
     return gradient
+
 
 @njit()
 def calculate_curvature_gradient(slope_arr: np.ndarray, 
@@ -279,14 +286,14 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         density = 1 / scanline[:, expected_value_col]
         
         # Smoothing case
-        k_neighbors = np.ceil(np.sqrt(density))
+        #k_neighbors = np.ceil(np.sqrt(density))
         
         # If k_neighbors is 1, set it to 2 to avoid too small neighborhoods
         #k_neighbors[k_neighbors == 1] = 2
-        k_neighbors *= 3
+        #k_neighbors *= 3
         
         # Smoothing with constant k
-        #k_neighbors = np.ones(scanline.shape[0]) * 5
+        k_neighbors = np.ones(scanline.shape[0]) * 20
         
         # No smoothing case
         #k_neighbors = np.ones(scanline.shape[0])
@@ -312,9 +319,11 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         if least_squares_method:
             slope_i = calculate_slope_least_squares(scanline=scanline,
                                                     num_neighbors=k_neighbors,
+                                                    x_col= x_col,
+                                                    y_col= y_col,
                                                     max_num_neighbors=max_num_neighbors,
-                                                    rho_col=horiz_angle_col,
-                                                    z_col=rho_col)
+                                                    rho_col=z_col,
+                                                    z_col=z_col)
         else:
             slope_i = calculate_slope(scanline_xyz=scanline, 
                                       padded_scanline=padded_scanline,
