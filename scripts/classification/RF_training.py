@@ -8,11 +8,11 @@ import numpy as np
 import joblib
 from pathlib import Path
 import sys
+import pickle
 
 sys.path.append(str(Path(__file__).parent.parent.absolute()))
 
 import utils.logger as lgr
-from utils.header_dict import header_dict
 
 # Set the root directory to the project directory (.../pcd_mesh)
 root_dir = Path(__file__).resolve().parent.parent.parent
@@ -23,7 +23,8 @@ logger = lgr.logger_setup('rf_training',
                             Path(root_dir) / "data/logs/rf_training.log")
 
 
-def load_data(file_paths):
+def load_data(file_paths: str,
+              attribute_statistics_path: str):
     """
     Load data from a CSV file or a list of CSV files and return a pandas DataFrame.
 
@@ -36,11 +37,13 @@ def load_data(file_paths):
     print(f'Loading data')
     if isinstance(file_paths, str):
         file_paths = [file_paths]
+        
+    with open(attribute_statistics_path, 'rb') as f:
+        attribute_statistics = pickle.load(f)
 
     data_frames = []
     for file_path in file_paths:
-        data = pd.read_csv(file_path, delimiter=' ', header=None,
-                           names=list(header_dict.keys()))
+        data = pd.read_csv(file_path, delimiter=' ', header=None, names=attribute_statistics)
         data_frames.append(data)
 
     return pd.concat(data_frames, axis=0)
@@ -98,10 +101,11 @@ def create_class_weights(labels):
 
 if __name__ == "__main__":
     # Load training data
-    data_dir = Path(root_dir) / "data/06_subsampling/ScanPos_Relocated"
-    model_path = Path(root_dir) / "data/models/random_forest_SiteA_ScanPosRelocated_ClassWeights.joblib"
+    data_dir = Path(root_dir) / "data/06_subsampling/SiteD_Scans_Global_I_RGB_RHV"
+    attribute_statistics_path = Path(root_dir) / "data/06_subsampling/attribute_statistics/attribute_statistics.pkl"
+    model_path = Path(root_dir) / "data/models/random_forest_98features.joblib"
     data_paths = list(data_dir.glob('*.txt'))
-    data = load_data(data_paths)
+    data = load_data(data_paths, attribute_statistics_path)
     
     # Split data into features and labels
     X = data.iloc[:, 9:-1].values
