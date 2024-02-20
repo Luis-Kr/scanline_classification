@@ -3,6 +3,9 @@ from typing import Tuple
 from numba import njit, prange, float64, int64
 from numba.typed import Dict
 from typing import List
+import pickle 
+import json
+from pathlib import Path
 
 
 @njit()
@@ -113,17 +116,22 @@ def calculate_attributes(segment):
 
 @njit()
 def calculate_segment_attributes(pcd: np.ndarray, 
-                                     segment_indices: np.ndarray,
-                                     label_col: int,
-                                     columns) -> np.ndarray:
+                                 segment_indices: np.ndarray,
+                                 segment_id_col: int,
+                                 label_col: int,
+                                 columns) -> np.ndarray:
     # Create an empty array to store the attributes
-    segment_attributes = np.zeros((1, (len(columns) * 7)+1))
+    segment_attributes = np.zeros((1, (len(columns) * 7)+2))
 
     # Calculate the attributes for each column
     for i, col in enumerate(columns):
         segment = pcd[segment_indices, col]
         segment_attributes[0, i*7:i*7+7] = calculate_attributes(segment)
-
+        
+    # Segment ID
+    segment_id_segment = pcd[segment_indices, segment_id_col][0] # All segment IDs are the same
+    segment_attributes[0, -2] = segment_id_segment
+    
     # Count labels
     labels_segment = pcd[segment_indices, label_col]
     segment_attributes[0, -1] = count_labels(labels_segment)
@@ -164,6 +172,7 @@ def process_segments(pcd: np.ndarray,
                      y_col: int,
                      z_col: int,
                      column_indices,
+                     segment_id_col: int,
                      label_col: int,
                      segment_ids_col: int) -> np.ndarray:
     # Sort the point cloud by segment id
@@ -186,6 +195,7 @@ def process_segments(pcd: np.ndarray,
         
         segment_attributes = calculate_segment_attributes(pcd=pcd,
                                                           segment_indices=segment_indices,
+                                                          segment_id_col=segment_id_col,
                                                           label_col=label_col,
                                                           columns=column_indices)
         
@@ -195,4 +205,14 @@ def process_segments(pcd: np.ndarray,
                                                            xyz_segment_max_nn, 
                                                            segment_attributes)
     
-    return processed_segments
+    return processed_segments, indices_per_class
+
+
+def save_attribute_statistics(file_path, attribute_statistics):
+    # Save as pickle file
+    with open(str(file_path) + '.pkl', 'wb') as f:
+        pickle.dump(attribute_statistics, f)
+
+    # Save as json file
+    with open(str(file_path) + '.json', 'w') as f:
+        json.dump(attribute_statistics, f)

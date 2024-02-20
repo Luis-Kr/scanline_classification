@@ -4,6 +4,7 @@ import logging
 import utils.scanline_extraction as sce
 import utils.scanline_segmentation as scs
 import utils.scanline_subsampling as scsb
+import utils.segment_classification as sgc
 import utils.logger as lgr
 from typing import List, Dict, Tuple
 import sys
@@ -14,6 +15,10 @@ import hydra
 from hydra import compose, initialize
 from omegaconf import DictConfig
 
+import warnings
+
+# Ignore warnings
+warnings.filterwarnings("ignore")
 
 # get the path of the current file
 root_dir = Path(__file__).parent.parent.absolute()
@@ -45,13 +50,19 @@ def prepare_attributes_and_format(cfg: DictConfig,
                                                     pcd_col=cfg.pcd_col,
                                                     pcd_col_fmt=cfg.pcd_col_fmt)
     
-    fmt_scsb = " ".join(fmt for fmt in column_fmt for _ in range(7)) + " " + "%u" #7 because of the number of statistics
+    fmt_scsb = " ".join(fmt for fmt in column_fmt for _ in range(7)) + " " + "%u" + " " + "%u" #7 because of the number of statistics
     fmt_scsb = " ".join(["%1.4f"] * len(cfg.xyz_attributes)) + " " + fmt_scsb
 
     attribute_statistics = [f"{attribute}_{statistic}" for attribute in cfg.attributes for statistic in cfg.statistics]
-    attribute_statistics = cfg.xyz_attributes + attribute_statistics + ["label"]
+    attribute_statistics = cfg.xyz_attributes + attribute_statistics + ["segment_id"] + ["label"]
+    
+    # Save attribute statistics as pickle file and json file
+    scsb.save_attribute_statistics(file_path=Path(root_dir) / "data/06_subsampling/attribute_statistics/attribute_statistics",
+                                   attribute_statistics=list(attribute_statistics))
+    
+    fmt_pcd_classified = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values())[:12] + ["%u"])
 
-    return fmt_sce, fmt_scs, fmt_scsb, column_indices, attribute_statistics
+    return fmt_sce, fmt_scs, fmt_scsb, column_indices, fmt_pcd_classified
 
 
 def check_attributes_and_normals(cfg: DictConfig):
@@ -73,12 +84,12 @@ def pcd_preprocessing(cfg: DictConfig,
     
     pcd = np.loadtxt(Path(root_dir) / cfg.pcd_path, delimiter=' ')
     
-    logger.info('Adjusting the theta and phi values...')
+    logger.info('Adjusting theta and phi values...')
     pcd[:, cfg.pcd_col.horiz_angle], pcd[:, cfg.pcd_col.vert_angle] = sce.adjust_angles(phi_zf=pcd[:, cfg.pcd_col.horiz_angle],
                                                                                         theta_zf=pcd[:, cfg.pcd_col.vert_angle])
     
     # Compute the knickpoints
-    logger.info('Computing the knickpoints...')
+    logger.info('Computing knickpoints...')
     
     pcd, knickpoints = sce.find_knickpoints(pcd=pcd, 
                                             threshold=cfg.sce.threshold, 
@@ -86,7 +97,7 @@ def pcd_preprocessing(cfg: DictConfig,
                                             vert_angle=cfg.pcd_col.vert_angle)
     
     # Extract the scanlines
-    logger.info('Extracting the scanlines...')
+    logger.info('Extracting scanlines...')
     
     n = pcd.shape[0]
     scanlines = np.zeros(n, dtype=np.float64)
@@ -97,9 +108,9 @@ def pcd_preprocessing(cfg: DictConfig,
     ## Calculate the mean point-to-point distances as expected values for the segmentation
     # Create a KDTree and calculate mean distances
     if cfg.sce.calculate_normals:
-        logger.info('Calculating the max point-to-point distances and the normals...')
+        logger.info('Calculating max point-to-point distances and normals...')
     else:
-        logger.info('Calculating the max point-to-point distances...')
+        logger.info('Calculating max point-to-point distances...')
         
     max_distances, pcd_xyz_scanpos_centered, normals = sce.kdtree_maxdist_normals(cfg=cfg,
                                                                                   pcd=pcd[:, (cfg.pcd_col.x,
@@ -125,7 +136,7 @@ def pcd_preprocessing(cfg: DictConfig,
     binned_distances_std_interpolated = sce.interpolate_distances(binned_distances_std)
 
     # Add expected value distance to the point cloud data
-    logger.info('Adding the expected value of distance to the point cloud data...')
+    logger.info('Adding the expected value of distance to the point cloud...')
     pcd = sce.add_expected_value_distance(pcd=pcd, 
                                           binned_pcd=binned_pcd, 
                                           binned_distance_interp=binned_distances_interpolated,
@@ -149,7 +160,7 @@ def scanline_segmentation(cfg: DictConfig,
                           logger: logging.Logger, 
                           normals_xyz: np.ndarray, 
                           normals: np.ndarray):    
-    logger.info('Calculating the segmentation metrics rho_diff, slope, curvature, roughness and normals...')
+    logger.info('Calculating segmentation metrics rho_diff, slope, curvature, roughness and normals...')
     
     # Sort the pcd by the vertical angle
     pcd_sorted, sort_indices = scs.sort_scanline(pcd=pcd, 
@@ -220,14 +231,13 @@ def scanline_segmentation(cfg: DictConfig,
             logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
             np.savetxt(Path(root_dir) / segmentation_path, pcd_segmented, fmt=fmt_scs, delimiter=' ')
     
-    return pcd_segmented
+    return pcd_segmented, pcd_sorted
 
 
 
 def scanline_subsampling(cfg: DictConfig, 
                          fmt_scsb: str,
                          column_indices: List[int],
-                         attribute_statistics: List[str],
                          pcd: np.ndarray, 
                          logger: logging.Logger): 
     logger.info('Scanline subsampling: Calculating the segment attributes...')
@@ -242,16 +252,19 @@ def scanline_subsampling(cfg: DictConfig,
     _, counts = np.unique(pcd[:,cfg.pcd_col.segment_ids], return_counts=True)
     
     # Calculate the segment attributes
-    pcd_processed_segments = scsb.process_segments(pcd=pcd, 
-                                                   segment_classes=segment_classes, 
-                                                   processed_segments=processed_segments, 
-                                                   counts=counts,
-                                                   x_col=cfg.pcd_col.x,
-                                                   y_col=cfg.pcd_col.y,
-                                                   z_col=cfg.pcd_col.z,
-                                                   column_indices=numba.typed.List(column_indices),
-                                                   label_col=cfg.pcd_col.label,
-                                                   segment_ids_col=cfg.pcd_col.segment_ids)
+    pcd_processed_segments, indices_per_class = scsb.process_segments(pcd=pcd, 
+                                                                      segment_classes=segment_classes, 
+                                                                      processed_segments=processed_segments, 
+                                                                      counts=counts,
+                                                                      x_col=cfg.pcd_col.x,
+                                                                      y_col=cfg.pcd_col.y,
+                                                                      z_col=cfg.pcd_col.z,
+                                                                      column_indices=numba.typed.List(column_indices),
+                                                                      segment_id_col=cfg.pcd_col.segment_ids,
+                                                                      label_col=cfg.pcd_col.label,
+                                                                      segment_ids_col=cfg.pcd_col.segment_ids)
+    
+    print(pcd_processed_segments.shape)
     
     if cfg.scsb.save_pcd:
         
@@ -270,6 +283,8 @@ def scanline_subsampling(cfg: DictConfig,
             logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
             print(pcd_processed_segments.shape)
             np.savetxt(Path(root_dir) / segmentation_path, pcd_processed_segments, fmt=fmt_scsb, delimiter=' ')
+            
+    return pcd_processed_segments, indices_per_class
 
 
 
@@ -286,8 +301,8 @@ def main(cfg: DictConfig):
     with open(Path(root_dir) / "data/logs/module_functionality.log", 'w'):
         pass
     
-    fmt_sce, fmt_scs, fmt_scsb, column_indices, attribute_statistics = prepare_attributes_and_format(cfg=cfg,
-                                                                                                     logger=logger)
+    fmt_sce, fmt_scs, fmt_scsb, column_indices, fmt_pcd_classified = prepare_attributes_and_format(cfg=cfg,
+                                                                                                                         logger=logger)
     
     check_attributes_and_normals(cfg=cfg)
     
@@ -297,22 +312,44 @@ def main(cfg: DictConfig):
                                                                           logger=logger)
     
     # PCD scanline segmentation
-    pcd_segmented=scanline_segmentation(cfg=cfg, 
-                                        fmt_scs=fmt_scs,
-                                        pcd=pcd, 
-                                        pcd_xyz_scanpos_centered=pcd_xyz_scanpos_centered,
-                                        logger=logger, 
-                                        normals_xyz=normals_xyz, 
-                                        normals=normals)
+    pcd_segmented, pcd_sorted=scanline_segmentation(cfg=cfg, 
+                                                    fmt_scs=fmt_scs,
+                                                    pcd=pcd, 
+                                                    pcd_xyz_scanpos_centered=pcd_xyz_scanpos_centered,
+                                                    logger=logger, 
+                                                    normals_xyz=normals_xyz, 
+                                                    normals=normals)
     
     # PCD scanline subsampling
-    scanline_subsampling(cfg=cfg, 
-                         fmt_scsb=fmt_scsb,
-                         column_indices=column_indices,
-                         attribute_statistics=attribute_statistics,
-                         pcd=pcd_segmented, 
-                         logger=logger)
-
+    pcd_processed_segments, indices_per_class=scanline_subsampling(cfg=cfg, 
+                                                                   fmt_scsb=fmt_scsb,
+                                                                   column_indices=column_indices,
+                                                                   pcd=pcd_segmented, 
+                                                                   logger=logger)
+    
+    logger.info('Segment classification...')
+    
+    # PCD segment classification
+    predicted_labels_subs = sgc.segment_classification(pcd_subsampled=pcd_processed_segments,
+                                                       model_filepath=Path(root_dir) / cfg.paths.rf_model,
+                                                       metrics_output_filepath=Path(root_dir) / cfg.paths.segcl.output_dir_metrics / (str(Path(cfg.pcd_path).stem) + "_metrics.csv"),
+                                                       cnfmatrix_output_path=Path(root_dir) / cfg.paths.segcl.output_dir_cnfmat / (str(Path(cfg.pcd_path).stem) + "_cnfmatrix.txt"))
+    
+    logger.info('Unfolding and assigning labels...')
+    
+    # Unfold the labels of the subsampled PCD
+    predicted_labels = sgc.unfold_labels(pcd=pcd_sorted, 
+                                         pcd_subs_predicted_labels=predicted_labels_subs,
+                                         indices_per_class=numba.typed.List(indices_per_class))
+    
+    logger.info('Assigning labels...')
+    
+    # Assign labels to the full resolution PCD
+    pcd_classified = sgc.assign_labels(pcd=pcd_sorted, predicted_labels=predicted_labels)
+    
+    logger.info('Saving the classified PCD...')
+    
+    np.savetxt(Path(root_dir) / cfg.paths.segcl.output_dir_pcd_classified / (str(Path(cfg.pcd_path).stem) + "_classified.txt"), pcd_classified, fmt=fmt_pcd_classified, delimiter=' ')
 
 if __name__=='__main__':
     main()
