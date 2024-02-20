@@ -1,6 +1,20 @@
 rf_model: data/models/random_forest_98features.joblib
 
+sce: 
+  dst_dir: scanline_extraction/
+
+scs:
+  dst_dir: scanline_segmentation/
+
+scsb:
+  dst_dir: scanline_subsampling/
+  attribute_stats: scanline_subsampling/attribute_statistics
+
 segcl:
-  output_dir_pcd_classified: data/07_classification
-  output_dir_metrics: data/07_classification/results_metrics
-  output_dir_cnfmat: data/07_classification/results_confusion_matrix
+  dst_dir_pcd_classified: classification
+  dst_dir_metrics: classification/results_metrics
+  dst_dir_cnfmat: classification/results_confusion_matrix
+  dst_dir_subsampled_pcd: classification/subsampled_pcd
+
+logger:
+  dst_dir: logs/

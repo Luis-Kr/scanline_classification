@@ -1,12 +1,13 @@
 import numpy as np
 from pathlib import Path
 import logging
-import utils.scanline_extraction as sce
-import utils.scanline_segmentation as scs
-import utils.scanline_subsampling as scsb
-import utils.segment_classification as sgc
+import scanline_utils.scanline_extraction as sce
+import scanline_utils.scanline_segmentation as scs
+import scanline_utils.scanline_subsampling as scsb
+import scanline_utils.segment_classification as sgc
 import utils.logger as lgr
-from typing import List, Dict, Tuple
+import utils.data_validation as dv
+from typing import List, Tuple
 import sys
 import numba
 
@@ -24,65 +25,13 @@ warnings.filterwarnings("ignore")
 root_dir = Path(__file__).parent.parent.absolute()
 
 
-def prepare_attributes_and_format(cfg: DictConfig, 
-                                  logger: logging.Logger) -> Tuple[str, str, str, List[int], List[str]]:
-    
-    logger.info('Preparing the attributes...')
-    
-    def get_column_indices(attributes: List[str], 
-                           pcd_col: Dict[str, int], 
-                           pcd_col_fmt: Dict[str, str]) -> Tuple[List[int], str]:
-        try:
-            column_indices = [pcd_col[attribute.lower()] for attribute in attributes]
-            column_fmt = [pcd_col_fmt[attribute.lower()] for attribute in attributes]
-            return column_indices, column_fmt
-        except KeyError as e:
-            raise KeyError(f"The attribute '{e.args[0]}' is not found in the dictionary. Please check the attribute names.")
-
-    # fmt scanline extraction
-    fmt_sce = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values())[:15])
-    
-    # fmt scanline segmentation
-    fmt_scs = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values()))
-    
-    # fmt scanline subsampling
-    column_indices, column_fmt = get_column_indices(attributes=cfg.attributes, 
-                                                    pcd_col=cfg.pcd_col,
-                                                    pcd_col_fmt=cfg.pcd_col_fmt)
-    
-    fmt_scsb = " ".join(fmt for fmt in column_fmt for _ in range(7)) + " " + "%u" + " " + "%u" #7 because of the number of statistics
-    fmt_scsb = " ".join(["%1.4f"] * len(cfg.xyz_attributes)) + " " + fmt_scsb
-
-    attribute_statistics = [f"{attribute}_{statistic}" for attribute in cfg.attributes for statistic in cfg.statistics]
-    attribute_statistics = cfg.xyz_attributes + attribute_statistics + ["segment_id"] + ["label"]
-    
-    # Save attribute statistics as pickle file and json file
-    scsb.save_attribute_statistics(file_path=Path(root_dir) / "data/06_subsampling/attribute_statistics/attribute_statistics",
-                                   attribute_statistics=list(attribute_statistics))
-    
-    fmt_pcd_classified = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values())[:12] + ["%u"])
-
-    return fmt_sce, fmt_scs, fmt_scsb, column_indices, fmt_pcd_classified
-
-
-def check_attributes_and_normals(cfg: DictConfig):
-    if cfg.sce.calculate_normals == False and all(x in cfg.attributes for x in ["nx", "ny", "nz"]):
-        sys.exit("""Error: The attributes contain 'nx', 'ny', and 'nz'. 
-                 However, the calculate_normals is set to False. 
-                 Please set the calculate_normals to True or remove 'nx', 'ny', and 'nz' from the attributes.""")
-    elif cfg.sce.calculate_normals == True and not all(x in cfg.attributes for x in ["nx", "ny", "nz"]):
-        sys.exit("""Error: The attributes do not contain 'nx', 'ny', and 'nz'. \n
-                    However, the calculate_normals is set to True. \n
-                    Please set the calculate_normals to False or add 'nx', 'ny', and 'nz' to the attributes.""")
-
-
 def pcd_preprocessing(cfg: DictConfig, 
                       fmt_sce: str,
                       logger: logging.Logger):
     # Read the pcd file
-    logger.info(f'Reading the point cloud: {Path(root_dir) / cfg.pcd_path}')
+    logger.info(f'Reading the point cloud: {str(root_dir / cfg.pcd_path)}')
     
-    pcd = np.loadtxt(Path(root_dir) / cfg.pcd_path, delimiter=' ')
+    pcd = np.loadtxt(root_dir / cfg.pcd_path, delimiter=' ')
     
     logger.info('Adjusting theta and phi values...')
     pcd[:, cfg.pcd_col.horiz_angle], pcd[:, cfg.pcd_col.vert_angle] = sce.adjust_angles(phi_zf=pcd[:, cfg.pcd_col.horiz_angle],
@@ -146,10 +95,14 @@ def pcd_preprocessing(cfg: DictConfig,
     pcd = sce.append_scanlines(pcd, scanlines)
     
     if cfg.sce.save_pcd:
-        sce_path = Path(*[part if part != '03_labeled' else '04_scanline_extraction' for part in Path(cfg.pcd_path).parts])
-        logger.info(f'Saving the scanlines: {Path(root_dir) / sce_path}')
-        np.savetxt(Path(root_dir) / sce_path, pcd, fmt=fmt_sce, delimiter=' ')
-    
+        dv.check_path(cfg.dst_dir / cfg.paths.sce.dst_dir)
+        if cfg.output_compressed:
+            logger.info(f'Saving the scanlines: {str(cfg.dst_dir / cfg.paths.sce.dst_dir / cfg.filename) + "_scnln.npz"}')
+            np.savez_compressed(str(cfg.dst_dir / cfg.paths.sce.dst_dir / cfg.filename) + "_scnln.npz", pcd)
+        else:
+            logger.info(f'Saving the scanlines: {str(cfg.dst_dir / cfg.paths.sce.dst_dir / cfg.filename) + "_scnln.txt"}')
+            np.savetxt(str(cfg.dst_dir / cfg.paths.sce.dst_dir / cfg.filename) + "_scnln.txt", pcd, fmt=fmt_sce, delimiter=' ')
+            
     return pcd, pcd_xyz_scanpos_centered, normals_xyz, normals
 
 
@@ -216,20 +169,28 @@ def scanline_segmentation(cfg: DictConfig,
 
     
     if cfg.scs.save_pcd:
-        
-        segmentation_path = Path(*[part if part != '03_labeled' else '05_segmentation' for part in Path(cfg.pcd_path).parts])
+        dv.check_path(cfg.dst_dir / cfg.paths.scs.dst_dir)
         
         if not cfg.sce.relocate_origin:
-            segmentation_path = segmentation_path.with_stem(segmentation_path.stem + "_Segmentation")
+                segmentation_filename = str(cfg.filename) + "_Segmentation"
         else:
-            segmentation_path = segmentation_path.with_stem(segmentation_path.stem + f"_Segmentation_ScanPosRelocated{cfg.sce.z_offset}m")
+            segmentation_filename = str(cfg.filename) + f"_Segmentation_ScanPosRelocated{cfg.sce.z_offset}m"
+    
+        if cfg.output_compressed:
+            if not cfg.sce.calculate_normals:
+                logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz"}')
+                np.savez_compressed(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz", pcd_segmented)
+            else:
+                logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz"}')
+                np.savez_compressed(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz", pcd_segmented)
         
-        if not cfg.sce.calculate_normals:
-            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
-            np.savetxt(Path(root_dir) / segmentation_path, pcd_segmented, fmt=fmt_scs.rsplit(' ', 3)[0], delimiter=' ')
         else:
-            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
-            np.savetxt(Path(root_dir) / segmentation_path, pcd_segmented, fmt=fmt_scs, delimiter=' ')
+            if not cfg.sce.calculate_normals:
+                logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt"}')
+                np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_segmented, fmt=fmt_scs.rsplit(' ', 3)[0], delimiter=' ')
+            else:
+                logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt"}')
+                np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_segmented, fmt=fmt_scs, delimiter=' ')
     
     return pcd_segmented, pcd_sorted
 
@@ -264,27 +225,26 @@ def scanline_subsampling(cfg: DictConfig,
                                                                       label_col=cfg.pcd_col.label,
                                                                       segment_ids_col=cfg.pcd_col.segment_ids)
     
-    print(pcd_processed_segments.shape)
+    logger.info(f'Subsampled pcd shape: {pcd_processed_segments.shape}')
     
     if cfg.scsb.save_pcd:
-        
-        segmentation_path = Path(*[part if part != '03_labeled' else '06_subsampling' for part in Path(cfg.pcd_path).parts])
+        dv.check_path(cfg.dst_dir / cfg.paths.scsb.dst_dir)
         
         if not cfg.sce.relocate_origin:
-            segmentation_path = segmentation_path.with_stem(segmentation_path.stem + "_Subsampling")
+            subsampled_filename = str(cfg.filename) + "_Subsampled"
         else:
-            segmentation_path = segmentation_path.with_stem(segmentation_path.stem + f"_Subsampling_ScanPosRelocated{cfg.sce.z_offset}m")
+            subsampled_filename = str(cfg.filename) + f"_Subsampled_ScanPosRelocated{cfg.sce.z_offset}m"
         
-        if cfg.sce.calculate_normals:
-            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
-            print(pcd_processed_segments.shape)
-            np.savetxt(Path(root_dir) / segmentation_path, pcd_processed_segments, fmt=fmt_scsb, delimiter=' ')
+        if cfg.output_compressed:
+            logger.info(f'Saving the subsampled pcd: {str(cfg.dst_dir / cfg.paths.scsb.dst_dir / subsampled_filename) + ".npz"}')
+            np.savez_compressed(str(cfg.dst_dir / cfg.paths.scsb.dst_dir / subsampled_filename) + ".npz", pcd_processed_segments)
         else:
-            logger.info(f'Saving the pcd with segmentation metrics: {Path(root_dir) / segmentation_path}')
-            print(pcd_processed_segments.shape)
-            np.savetxt(Path(root_dir) / segmentation_path, pcd_processed_segments, fmt=fmt_scsb, delimiter=' ')
+            logger.info(f'Saving the subsampled pcd: {str(cfg.dst_dir / cfg.paths.scsb.dst_dir / subsampled_filename) + ".txt"}')
+            np.savetxt(str(cfg.dst_dir / cfg.paths.scsb.dst_dir / subsampled_filename) + ".txt", pcd_processed_segments, fmt=fmt_scsb, delimiter=' ')
+            
             
     return pcd_processed_segments, indices_per_class
+
 
 
 
@@ -293,18 +253,34 @@ def main(cfg: DictConfig):
     # Clear the hydra config cache
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     
+    # Check if cfg.output_dir is None (if yes, set it to the current working directory)
+    if cfg.dst_dir == "None":
+        cfg.dst_dir = Path.cwd()
+    
+    if not isinstance(cfg.dst_dir, Path):
+        cfg.dst_dir = Path(cfg.dst_dir)
+        
+    if not isinstance(cfg.pcd_path, Path):
+        cfg.pcd_path = Path(cfg.pcd_path)
+        
+    dv.check_path(cfg.dst_dir)
+    dv.check_path(cfg.dst_dir / cfg.paths.scsb.attribute_stats)
+    
     # Set up the logger
-    logger = lgr.logger_setup('functionality_logger', 
-                              Path(root_dir) / "data/logs/module_functionality.log")
+    logger = lgr.logger_setup('main', cfg.dst_dir / cfg.paths.logger.dst_dir / "main.log")
     
     # Clear the log file
-    with open(Path(root_dir) / "data/logs/module_functionality.log", 'w'):
-        pass
+    if cfg.clear_logs:
+        with open(cfg.dst_dir / cfg.paths.logger.dst_dir / "main.log", 'w'):
+            pass
+        
+    cfg.filename = Path(cfg.pcd_path).stem
     
-    fmt_sce, fmt_scs, fmt_scsb, column_indices, fmt_pcd_classified = prepare_attributes_and_format(cfg=cfg,
-                                                                                                                         logger=logger)
+    logger.info('Preparing the attributes...')
     
-    check_attributes_and_normals(cfg=cfg)
+    fmt_sce, fmt_scs, fmt_scsb, column_indices, fmt_pcd_classified = dv.prepare_attributes_and_format(cfg=cfg)
+    
+    dv.check_attributes_and_normals(cfg=cfg)
     
     # PCD preprocessing
     pcd, pcd_xyz_scanpos_centered, normals_xyz, normals=pcd_preprocessing(cfg=cfg, 
@@ -327,29 +303,36 @@ def main(cfg: DictConfig):
                                                                    pcd=pcd_segmented, 
                                                                    logger=logger)
     
-    logger.info('Segment classification...')
-    
-    # PCD segment classification
-    predicted_labels_subs = sgc.segment_classification(pcd_subsampled=pcd_processed_segments,
-                                                       model_filepath=Path(root_dir) / cfg.paths.rf_model,
-                                                       metrics_output_filepath=Path(root_dir) / cfg.paths.segcl.output_dir_metrics / (str(Path(cfg.pcd_path).stem) + "_metrics.csv"),
-                                                       cnfmatrix_output_path=Path(root_dir) / cfg.paths.segcl.output_dir_cnfmat / (str(Path(cfg.pcd_path).stem) + "_cnfmatrix.txt"))
-    
-    logger.info('Unfolding and assigning labels...')
-    
-    # Unfold the labels of the subsampled PCD
-    predicted_labels = sgc.unfold_labels(pcd=pcd_sorted, 
-                                         pcd_subs_predicted_labels=predicted_labels_subs,
-                                         indices_per_class=numba.typed.List(indices_per_class))
-    
-    logger.info('Assigning labels...')
-    
-    # Assign labels to the full resolution PCD
-    pcd_classified = sgc.assign_labels(pcd=pcd_sorted, predicted_labels=predicted_labels)
-    
-    logger.info('Saving the classified PCD...')
-    
-    np.savetxt(Path(root_dir) / cfg.paths.segcl.output_dir_pcd_classified / (str(Path(cfg.pcd_path).stem) + "_classified.txt"), pcd_classified, fmt=fmt_pcd_classified, delimiter=' ')
+    if cfg.run_classification:
+        logger.info('Segment classification...')
+        
+        dv.check_path(cfg.dst_dir / cfg.paths.segcl.dst_dir_metrics)
+        dv.check_path(cfg.dst_dir / cfg.paths.segcl.dst_dir_cnfmat)
+        dv.check_path(cfg.dst_dir / cfg.paths.segcl.dst_dir_subsampled_pcd)
+        dv.check_path(cfg.dst_dir / cfg.paths.segcl.dst_dir_subsampled_pcd)
+        
+        # PCD segment classification
+        predicted_labels_subs = sgc.segment_classification(cfg=cfg,
+                                                           pcd_subsampled=pcd_processed_segments,
+                                                           model_filepath=root_dir / cfg.paths.rf_model,
+                                                           metrics_output_filepath=cfg.dst_dir / cfg.paths.segcl.dst_dir_metrics / (str(cfg.filename) + "_metrics.csv"),
+                                                           cnfmatrix_output_path=cfg.dst_dir / cfg.paths.segcl.dst_dir_cnfmat / (str(cfg.filename) + "_cnfmatrix.txt"),
+                                                           pcd_subsampled_classified_path=cfg.dst_dir / cfg.paths.segcl.dst_dir_subsampled_pcd / cfg.filename)
+        
+        logger.info('Unfolding and assigning labels...')
+        predicted_labels = sgc.unfold_labels(pcd=pcd_sorted, 
+                                             pcd_subs_predicted_labels=predicted_labels_subs,
+                                             indices_per_class=numba.typed.List(indices_per_class))
+        
+        logger.info('Assigning labels to the full resolution PCD...')
+        pcd_classified = sgc.assign_labels(pcd=pcd_sorted, predicted_labels=predicted_labels)
+        
+        if cfg.output_compressed:
+            logger.info(f'Saving the classified pcd: {str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.npz"))}')
+            np.savez_compressed(str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.npz")), pcd_classified)
+        else:
+            logger.info(f'Saving the classified pcd: {str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.txt"))}')
+            np.savetxt(str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.txt")), pcd_classified, fmt=fmt_pcd_classified, delimiter=' ')
 
 if __name__=='__main__':
     main()
