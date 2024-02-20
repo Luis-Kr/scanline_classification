@@ -1,4 +1,4 @@
-# Point cloud segmentation and subsampling approach based on scanline processing
+# Scanline based point cloud segmentation and subsampling approach for fast classification
 
 ## Conda environment installation 
 
