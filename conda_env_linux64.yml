@@ -1,5 +1,0 @@
-name: scanline_segmentation
-channels:
-  - conda-forge
-dependencies:
-  - python=3.10
