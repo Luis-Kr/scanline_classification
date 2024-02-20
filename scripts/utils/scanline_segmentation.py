@@ -148,27 +148,27 @@ def calculate_slope_least_squares(scanline: np.ndarray,
                                   x_col: int,
                                   y_col: int,
                                   max_num_neighbors: int,
-                                  rho_col: int,
-                                  z_col: int) -> np.ndarray:
+                                  X_col: int,
+                                  Y_col: int) -> np.ndarray:
     # Extract the rho and z coordinates from the scanline
-    rho = scanline[:, rho_col]
-    x = scanline[:, x_col]
-    y = scanline[:, y_col]
-    z = np.sqrt(x**2 + y**2)
-    #z = scanline[:, z_col]
+    X = scanline[:, X_col]
+    Y = scanline[:, Y_col]
+    # x = scanline[:, x_col]
+    # y = scanline[:, y_col]
+    # Y = np.sqrt(x**2 + y**2)
     
     # Merge the rho and z-coordinates into a single array
-    scanline_rho_z = np.column_stack((rho, z))
+    scanline_XY = np.column_stack((X, Y))
     
     # Pad the array at the beginning and end
-    pad_scanline_rho_z = pad_reflect(scanline_rho_z, max_num_neighbors)
+    pad_scanline_XY = pad_reflect(scanline_XY, max_num_neighbors)
     
     # Calculate the slope using the least-squares method for each point in the scanline
     slope = np.zeros(scanline.shape[0])
     for idx in range(scanline.shape[0]):
         n = int(idx + max_num_neighbors)
-        slope[idx] = slope_lstsq_local_neighborhood(points_left_side=pad_scanline_rho_z[n-num_neighbors[idx]:n], 
-                                                    points_right_side=pad_scanline_rho_z[n+1:n+num_neighbors[idx]+1])
+        slope[idx] = slope_lstsq_local_neighborhood(points_left_side=pad_scanline_XY[n-num_neighbors[idx]:n], 
+                                                    points_right_side=pad_scanline_XY[n+1:n+num_neighbors[idx]+1])
     
     return slope
 
@@ -286,17 +286,14 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         density = 1 / scanline[:, expected_value_col]
         
         # Smoothing case
-        #k_neighbors = np.ceil(np.sqrt(density))
+        k_neighbors = np.ceil(np.sqrt(density))
         
-        # If k_neighbors is 1, set it to 2 to avoid too small neighborhoods
-        #k_neighbors[k_neighbors == 1] = 2
-        #k_neighbors *= 3
+        # If k_neighbors is 1 or 2, set it to 3 to avoid too small neighborhoods
+        k_neighbors[(k_neighbors == 1) | (k_neighbors == 2)] = 3
+        k_neighbors *= 3
         
         # Smoothing with constant k
-        k_neighbors = np.ones(scanline.shape[0]) * 20
-        
-        # No smoothing case
-        #k_neighbors = np.ones(scanline.shape[0])
+        #k_neighbors = np.ones(scanline.shape[0]) * 20
         
         # Extract the x, y, z coordinates from the scanline (numba does not support indexing with multiple columns)
         x = scanline[:, x_col]
@@ -322,8 +319,8 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                                     x_col= x_col,
                                                     y_col= y_col,
                                                     max_num_neighbors=max_num_neighbors,
-                                                    rho_col=z_col,
-                                                    z_col=z_col)
+                                                    X_col=horiz_angle_col,
+                                                    Y_col=rho_col)
         else:
             slope_i = calculate_slope(scanline_xyz=scanline, 
                                       padded_scanline=padded_scanline,
