@@ -1,4 +1,4 @@
-# Scanline based point cloud segmentation and subsampling approach for fast classification
+# TLS point cloud classification using a scanline based segmentation and subsampling approach.
 
 ## Conda environment installation 
 
