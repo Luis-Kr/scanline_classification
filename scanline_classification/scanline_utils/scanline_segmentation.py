@@ -268,6 +268,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                    expected_value_col: int,
                                    rho_col: int,
                                    horiz_angle_col: int,
+                                   neighborhood_multiplier: float,
                                    least_squares_method: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     # Create empty arrays to store the segmentation metrics
     rho_diff = np.zeros(pcd.shape[0])
@@ -290,7 +291,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         
         # If k_neighbors is 1 or 2, set it to 3 to avoid too small neighborhoods
         k_neighbors[(k_neighbors == 1) | (k_neighbors == 2)] = 3
-        k_neighbors *= 3
+        k_neighbors *= neighborhood_multiplier
         
         # Smoothing with constant k
         #k_neighbors = np.ones(scanline.shape[0]) * 20
