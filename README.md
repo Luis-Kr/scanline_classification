@@ -1,4 +1,4 @@
-# Scanline based point cloud segmentation and subsampling approach for fast classification
+# TLS point cloud classification using a scanline based segmentation and subsampling approach
 
 ## Conda environment installation 
 
@@ -6,7 +6,7 @@ To install the conda environment used for the project, run the following command
 
 > conda env create -f environment.yml
 
-This will create a new conda environment called 'scanline_segmentation' with all the necessary dependencies for this project. Most packages were installed using pip as the package manager. For packages that failed to install with pip, conda was used. The python version is 3.10. 
+This will create a new conda environment called 'scanline_classification' with all the necessary dependencies for this project. Most packages were installed using pip as the package manager. For packages that failed to install with pip, conda was used. The python version is 3.10. 
 
 To activate the environment, run:
 
