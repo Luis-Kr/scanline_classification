@@ -4,14 +4,14 @@ defaults:
   - paths: ../paths
 
 # Path where the point cloud is stored
-pcd_path: data/03_labeled/SiteD_Scans_Global_I_RGB_RHV/SiteD_RHV_01_Labeled.txt
+pcd_path: data/03_labeled/SiteD_RHV_01_Labeled.txt
 
 # Path for saving the output of the module
-dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/test_output
+dst_dir: /DATA/Luis/thesis/scanline_classification/data/test_output
 
 # Compression of the output point clouds (True: .npz-files, False: .txt-files)
 # Compression needs more time but less space 
-output_compressed: True 
+output_compressed: False 
 
 # Attributes to be calculated that are taken into account for training the random forest model
 #attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
@@ -46,14 +46,14 @@ scs:
 
 # Subsampling
 scsb:
-  save_pcd: False
+  save_pcd: True
 
 # Segment classification
 sgcl:
   save_pcd: False
 
 # Whether to run the classification or not
-run_classification: True
+run_classification: False
 
 # Whether to clear the logs or not
 clear_logs: False
