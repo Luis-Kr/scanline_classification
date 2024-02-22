@@ -10,6 +10,7 @@ import utils.data_validation as dv
 from typing import List, Tuple
 import sys
 import numba
+import pandas as pd
 
 # Hydra and OmegaConf imports
 import hydra
@@ -131,6 +132,7 @@ def scanline_segmentation(cfg: DictConfig,
                                                                                expected_value_col=cfg.pcd_col.expected_value,
                                                                                rho_col=cfg.pcd_col.rho,
                                                                                horiz_angle_col=cfg.pcd_col.horiz_angle,
+                                                                               neighborhood_multiplier=np.float64(cfg.scs.neighborhood_multiplier),
                                                                                least_squares_method=cfg.scs.least_squares_method)
     
     # Add the segmentation metrics to the point cloud data
@@ -213,17 +215,17 @@ def scanline_subsampling(cfg: DictConfig,
     _, counts = np.unique(pcd[:,cfg.pcd_col.segment_ids], return_counts=True)
     
     # Calculate the segment attributes
-    pcd_processed_segments, indices_per_class = scsb.process_segments(pcd=pcd, 
-                                                                      segment_classes=segment_classes, 
-                                                                      processed_segments=processed_segments, 
-                                                                      counts=counts,
-                                                                      x_col=cfg.pcd_col.x,
-                                                                      y_col=cfg.pcd_col.y,
-                                                                      z_col=cfg.pcd_col.z,
-                                                                      column_indices=numba.typed.List(column_indices),
-                                                                      segment_id_col=cfg.pcd_col.segment_ids,
-                                                                      label_col=cfg.pcd_col.label,
-                                                                      segment_ids_col=cfg.pcd_col.segment_ids)
+    pcd_processed_segments, indices_per_class, gini_impurity = scsb.process_segments(pcd=pcd, 
+                                                                                    segment_classes=segment_classes, 
+                                                                                    processed_segments=processed_segments, 
+                                                                                    counts=counts,
+                                                                                    x_col=cfg.pcd_col.x,
+                                                                                    y_col=cfg.pcd_col.y,
+                                                                                    z_col=cfg.pcd_col.z,
+                                                                                    column_indices=numba.typed.List(column_indices),
+                                                                                    segment_id_col=cfg.pcd_col.segment_ids,
+                                                                                    label_col=cfg.pcd_col.label,
+                                                                                    segment_ids_col=cfg.pcd_col.segment_ids)
     
     logger.info(f'Subsampled pcd shape: {pcd_processed_segments.shape}')
     
@@ -241,6 +243,27 @@ def scanline_subsampling(cfg: DictConfig,
         else:
             logger.info(f'Saving the subsampled pcd: {str(cfg.dst_dir / cfg.paths.scsb.dst_dir / subsampled_filename) + ".txt"}')
             np.savetxt(str(cfg.dst_dir / cfg.paths.scsb.dst_dir / subsampled_filename) + ".txt", pcd_processed_segments, fmt=fmt_scsb, delimiter=' ')
+
+
+    if cfg.scsb.save_gini_impurity:
+        dv.check_path(cfg.dst_dir / cfg.paths.scsb.gini_impurity)
+        filename = str(cfg.filename) + "_GiniImpurity"
+        
+        df = pd.DataFrame({
+            'std_multiplier': [cfg.scs.std_multiplier],
+            'curvature_threshold': [cfg.scs.curvature_threshold],
+            'neighborhood_multiplier': [cfg.scs.neighborhood_multiplier]
+        })
+
+        # Write the DataFrame to a CSV file
+        df.to_csv(str(cfg.dst_dir / cfg.paths.scsb.gini_impurity / filename) + f"_StdM{cfg.scs.std_multiplier}_CurvT{cfg.scs.curvature_threshold}_NghM{cfg.scs.neighborhood_multiplier}.csv", index=False)
+        
+        if cfg.output_compressed:
+            logger.info(f'Saving the gini impurity values: {str(cfg.dst_dir / cfg.paths.scsb.gini_impurity / filename) + f"_StdM{cfg.scs.std_multiplier}_CurvT{cfg.scs.curvature_threshold}_NghM{cfg.scs.neighborhood_multiplier}.npz"}')
+            np.savez_compressed(str(cfg.dst_dir / cfg.paths.scsb.gini_impurity / filename) + f"_StdM{cfg.scs.std_multiplier}_CurvT{cfg.scs.curvature_threshold}_NghM{cfg.scs.neighborhood_multiplier}.npz", gini_impurity)
+        else:
+            logger.info(f'Saving the gini impurity values: {str(cfg.dst_dir / cfg.paths.scsb.gini_impurity / filename) + f"_StdM{cfg.scs.std_multiplier}_CurvT{cfg.scs.curvature_threshold}_NghM{cfg.scs.neighborhood_multiplier}.txt"}')
+            np.savetxt(str(cfg.dst_dir / cfg.paths.scsb.gini_impurity / filename) + f"_StdM{cfg.scs.std_multiplier}_CurvT{cfg.scs.curvature_threshold}_NghM{cfg.scs.neighborhood_multiplier}.txt", gini_impurity, fmt='%1.4f', delimiter=' ')
             
             
     return pcd_processed_segments, indices_per_class
