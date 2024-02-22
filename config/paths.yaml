@@ -9,6 +9,7 @@ scs:
 scsb:
   dst_dir: scanline_subsampling/
   attribute_stats: scanline_subsampling/attribute_statistics
+  gini_impurity: scanline_subsampling/gini_impurity
 
 segcl:
   dst_dir_pcd_classified: classification

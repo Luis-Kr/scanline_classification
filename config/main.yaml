@@ -7,15 +7,15 @@ defaults:
 pcd_path: data/03_labeled/SiteD_Scans_Global_I_RGB_RHV/SiteD_RHV_01_Labeled.txt
 
 # Path for saving the output of the module
-dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/test_output
+dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/gini_impurity
 
 # Compression of the output point clouds (True: .npz-files, False: .txt-files)
 # Compression needs more time but less space 
 output_compressed: False 
 
 # Attributes to be calculated that are taken into account for training the random forest model
-#attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
-attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
+attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
+#attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
 
 # Scanline extraction
 sce:
@@ -31,7 +31,7 @@ sce:
   z_offset: 30 
   # If True, the "real" 3D normals are calculated using estimates of the local surface defined by a point and its neighbors
   # Will slow down the process!
-  calculate_normals: True
+  calculate_normals: False
   # Whether or not the point cloud should be saved after this intermediate processing step
   save_pcd: False
 
@@ -41,12 +41,14 @@ scs:
   # Curvature threshold (deg) at which scanlines are split into segments
   curvature_threshold: 30
   std_multiplier: 25
+  neighborhood_multiplier: 2
   least_squares_method: True # If false, rise/run method is used for slope calculation
-  save_pcd: True
+  save_pcd: False
 
 # Subsampling
 scsb:
   save_pcd: False
+  save_gini_impurity: True
 
 # Segment classification
 sgcl:
