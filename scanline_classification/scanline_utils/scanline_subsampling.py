@@ -71,8 +71,9 @@ def segment_subsampling(pcd: np.ndarray,
     return xyz_segment_median_nn, xyz_segment_min_nn, xyz_segment_max_nn
 
 
+#@njit(int64(int64[:]))
 @njit()
-def count_labels(labels_segment):
+def count_labels(labels_segment: np.ndarray):
     unique_labels = np.unique(labels_segment)
     max_count = 0
     max_label = -1
@@ -85,6 +86,22 @@ def count_labels(labels_segment):
     return max_label
 
 
+#@njit(float64(int64[:]))
+@njit()
+def gini_impurity(labels_segment: np.ndarray):
+    gini_impurity = 1
+    unique_classes = np.unique(labels_segment)
+    for i in prange(unique_classes.shape[0]):
+        cls = unique_classes[i]
+        p = np.sum(labels_segment == cls) / len(labels_segment)
+        gini_impurity -= p**2
+        
+    # Get the number of points in the segment
+    num_points = labels_segment.shape[0]
+    return np.round(gini_impurity, 4), num_points
+
+
+#@njit(float64(float64[:]))
 @njit()
 def calculate_skewness(data: np.ndarray) -> float:
     # Calculate mean and standard deviation
@@ -110,7 +127,7 @@ def calculate_attributes(segment):
     attributes[3] = np.nanmedian(segment)
     attributes[4] = np.nanpercentile(segment, 2)
     attributes[5] = np.nanpercentile(segment, 98)
-    attributes[6] = calculate_skewness(segment)
+    attributes[6] = calculate_skewness(segment)#.astype(np.float64)
     return attributes
 
 
@@ -119,9 +136,10 @@ def calculate_segment_attributes(pcd: np.ndarray,
                                  segment_indices: np.ndarray,
                                  segment_id_col: int,
                                  label_col: int,
-                                 columns) -> np.ndarray:
+                                 columns) -> Tuple[np.ndarray, np.ndarray]:
     # Create an empty array to store the attributes
     segment_attributes = np.zeros((1, (len(columns) * 7)+2))
+    gini_impurity_segment = np.empty(1)
 
     # Calculate the attributes for each column
     for i, col in enumerate(columns):
@@ -135,8 +153,11 @@ def calculate_segment_attributes(pcd: np.ndarray,
     # Count labels
     labels_segment = pcd[segment_indices, label_col]
     segment_attributes[0, -1] = count_labels(labels_segment)
+    
+    # Gini impurity of the segment
+    gini_impurity_segment, num_points = gini_impurity(labels_segment)
 
-    return segment_attributes
+    return segment_attributes, gini_impurity_segment, num_points
 
 
 
@@ -181,6 +202,9 @@ def process_segments(pcd: np.ndarray,
     # Split the sorted indices into segments
     indices_per_class = np.split(sorted_indices, np.cumsum(counts[:-1]))
     
+    # Create an empty array to store the gini impurity of each segment
+    gini_impurity = np.zeros((segment_classes.shape[0], 5))
+    
     # Process each segment
     for i in prange(segment_classes.shape[0]):
         # Get the indices for the current segment
@@ -193,19 +217,23 @@ def process_segments(pcd: np.ndarray,
                                                                                             y_col=y_col,
                                                                                             z_col=z_col)
         
-        segment_attributes = calculate_segment_attributes(pcd=pcd,
-                                                          segment_indices=segment_indices,
-                                                          segment_id_col=segment_id_col,
-                                                          label_col=label_col,
-                                                          columns=column_indices)
-        
+        segment_attributes, gini_impurity_segment, num_points = calculate_segment_attributes(pcd=pcd,
+                                                                                            segment_indices=segment_indices,
+                                                                                            segment_id_col=segment_id_col,
+                                                                                            label_col=label_col,
+                                                                                            columns=column_indices)
+                    
         # Add the combined attributes to the array
         processed_segments[i] = combine_segment_attributes(xyz_segment_median_nn, 
                                                            xyz_segment_min_nn, 
                                                            xyz_segment_max_nn, 
                                                            segment_attributes)
+        
+        gini_impurity[i, :3] = xyz_segment_median_nn
+        gini_impurity[i, -2] = num_points
+        gini_impurity[i, -1] = gini_impurity_segment
     
-    return processed_segments, indices_per_class
+    return processed_segments, indices_per_class, gini_impurity
 
 
 def save_attribute_statistics(file_path, attribute_statistics):
