@@ -1,0 +1,28 @@
+# training_data_path: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/training/merged/training_data_merged_frac.csv"
+# testing_data_path: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/validation/merged/validation_data_merged_frac.csv"
+# output_dir: "/DATA/Luis/thesis/scanline_classification/models/xgb_training/best_model_v02"
+
+training_data_path: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/training/merged/training_data_merged_frac_test.csv"
+training_data_subsampled_dir: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/training"
+validation_file_frac: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/validation/merged/validation_data_merged_frac.csv"
+validation_data_dir: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/validation"
+segmentation_data_dir: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/scanline_segmentation"
+attribute_statistics_path: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/scanline_subsampling/attribute_statistics/SiteA_RHV_01_Labeled.pkl"
+output_dir_model: "/DATA/Luis/thesis/scanline_classification/models/xgb_training/best_model_v02"
+output_dir: "/DATA/Luis/thesis/scanline_classification/data/final_results/2_hyperparameter_testing"
+
+n_estimators: 100 #200
+max_depth: 3 #4
+learning_rate: 0.3 #0.1
+
+id: 1
+
+class_to_drop: 0
+
+drop_col: none
+col_to_consider: None
+statistics: "mean"
+statistics_all: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]
+
+statistics_feat_importance: True
+coarse: False

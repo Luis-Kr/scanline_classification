@@ -1,0 +1,29 @@
+condsider_all_features_and_stats: False
+
+all:
+  cols_to_consider: ["z", "intensity", "red", "green", "blue", "rho", "vert_angle", "slope", "curvature", "roughness", "nx_xyz", "ny_xyz", "nz_xyz", "nx", "ny", "nz"]
+  stats_to_consider: ["mean", "var", "std", "median", "perc2nd", "perc98th", "perc25th", "perc75th", "skewness"]
+
+best_overall: 
+  cols_to_consider: ["vert_angle", "roughness", "slope", "nx", "red", "nz", "curvature", "z", "green", "ny"]
+  stats_to_consider: ["skewness", "perc2nd", "perc75th", "perc25th", "std", "perc98th"]
+
+best_mmo:
+  cols_to_consider: ["roughness", "nx", "slope", "nz", "red", "curvature", "nz_xyz", "ny", "red"]
+  stats_to_consider: ["skewness", "perc75th", "perc2nd", "perc25th"]
+
+best_ground:
+  cols_to_consider: ["vert_angle", "z", "roughness", "blue", "red", "slope", "nx", "ny", "nz", "green"]
+  stats_to_consider: ["skewness", "perc2nd", "perc98th", "perc75th"]
+
+best_tree:
+  cols_to_consider: ["z","nx","red","nz","nz_xyz","slope","roughness","green","curvature"]
+  stats_to_consider: ["skewness","perc2nd","perc75th","perc25th","std","median"]
+
+best_leaves:
+  cols_to_consider: ["vert_angle", "rho", "roughness", "z", "nz", "red", "intensity", "slope", "blue", "nx", "green", "curvature"]
+  stats_to_consider: ["skewness", "perc2nd", "std", "perc98th", "perc75th"]
+
+best_low_vegetation:
+  cols_to_consider: ["vert_angle", "slope", "rho", "roughness", "intensity", "green", "nx", "curvature", "ny"]
+  stats_to_consider: ["skewness", "perc2nd", "perc98th", "std", "perc75th", "perc25th"]

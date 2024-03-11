@@ -113,7 +113,7 @@ def calculate_slope(scanline_xyz: np.ndarray,
         
         # Calculate the slope at the current point by taking the mean slope
         # between the current point and its neighbors on the left and right
-        slope[idx] = np.mean(get_slope_3D(points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
+        slope[idx] = np.median(get_slope_3D(points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
                                           points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
 
     return slope
@@ -185,7 +185,7 @@ def calculate_curvature(slope_arr: np.ndarray,
     
     for idx in range(slope_arr.shape[0]):
         i = idx + max_num_neighbors
-        curvature[idx] = np.mean(np.abs(pad_slope_arr[i+1:i+num_neighbors[idx]+1] - pad_slope_arr[i-num_neighbors[idx]:i][::-1]))
+        curvature[idx] = np.median(np.abs(pad_slope_arr[i+1:i+num_neighbors[idx]+1] - pad_slope_arr[i-num_neighbors[idx]:i][::-1]))
 
     return curvature
 
@@ -252,9 +252,9 @@ def calculate_roughness(scanline_xyz: np.ndarray,
     roughness = np.zeros(scanline_xyz.shape[0])
     for idx in range(scanline_xyz.shape[0]):
         n = int(idx + max_num_neighbors)
-        roughness[idx] = np.nanvar(calculate_distances_point_lines(center_point=padded_scanline[n], 
-                                                                   points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
-                                                                   points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
+        roughness[idx] = np.nanpercentile(calculate_distances_point_lines(center_point=padded_scanline[n], 
+                                                                          points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
+                                                                          points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]), 95)
     
     return roughness
 
@@ -273,7 +273,9 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     # Create empty arrays to store the segmentation metrics
     rho_diff = np.zeros(pcd.shape[0])
     slope = np.zeros(pcd.shape[0])
+    slope_lstsq = np.zeros(pcd.shape[0])
     curvature = np.zeros(pcd.shape[0])
+    curvature_lstsq = np.zeros(pcd.shape[0])
     roughness = np.zeros(pcd.shape[0])
     
     # Calculate the segmentation metrics for each scanline
@@ -289,9 +291,12 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         # Smoothing case
         k_neighbors = np.ceil(np.sqrt(density))
         
-        # If k_neighbors is 1 or 2, set it to 3 to avoid too small neighborhoods
-        k_neighbors[(k_neighbors == 1) | (k_neighbors == 2)] = 3
+        # If k_neighbors is smaller than 3, set it to 3 to avoid too small neighborhoods
+        k_neighbors[k_neighbors < 3] = 3
         k_neighbors *= neighborhood_multiplier
+        
+        # Round to the nearest integer
+        k_neighbors = np.round(k_neighbors)
         
         # Smoothing with constant k
         #k_neighbors = np.ones(scanline.shape[0]) * 20
@@ -314,19 +319,19 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         rho_diff_i = calculate_rho_diff(scanline, 
                                         rho_col=rho_col)
         
-        if least_squares_method:
-            slope_i = calculate_slope_least_squares(scanline=scanline,
-                                                    num_neighbors=k_neighbors,
-                                                    x_col= x_col,
-                                                    y_col= y_col,
-                                                    max_num_neighbors=max_num_neighbors,
-                                                    X_col=horiz_angle_col,
-                                                    Y_col=rho_col)
-        else:
-            slope_i = calculate_slope(scanline_xyz=scanline, 
-                                      padded_scanline=padded_scanline,
-                                      num_neighbors=k_neighbors,
-                                      max_num_neighbors=max_num_neighbors)
+        #if least_squares_method:
+        slope_lstsq_i = calculate_slope_least_squares(scanline=scanline,
+                                                num_neighbors=k_neighbors,
+                                                x_col= x_col,
+                                                y_col= y_col,
+                                                max_num_neighbors=max_num_neighbors,
+                                                X_col=horiz_angle_col,
+                                                Y_col=rho_col)
+        #else:
+        slope_i = calculate_slope(scanline_xyz=scanline, 
+                                    padded_scanline=padded_scanline,
+                                    num_neighbors=k_neighbors,
+                                    max_num_neighbors=max_num_neighbors)
         
         # curvature_i = calculate_curvature(slope_arr=slope_i, 
         #                                   num_neighbors=k_neighbors,
@@ -335,6 +340,8 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         curvature_i = calculate_curvature_gradient(slope_arr=slope_i, 
                                                    max_num_neighbors=max_num_neighbors)
         
+        curvature_lstsq_i = calculate_curvature_gradient(slope_arr=slope_lstsq_i, 
+                                                         max_num_neighbors=max_num_neighbors)
         
         roughness_i = calculate_roughness(scanline_xyz=scanline_xyz, 
                                           padded_scanline=padded_scanline,
@@ -343,10 +350,12 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         
         rho_diff[scanline_indices] = rho_diff_i
         slope[scanline_indices] = slope_i
+        slope_lstsq[scanline_indices] = slope_lstsq_i
         curvature[scanline_indices] = curvature_i
+        curvature_lstsq[scanline_indices] = curvature_lstsq_i
         roughness[scanline_indices] = roughness_i
 
-    return rho_diff, slope, curvature, roughness
+    return rho_diff, slope, slope_lstsq, curvature, curvature_lstsq, roughness
 
 
 @njit(parallel=True)

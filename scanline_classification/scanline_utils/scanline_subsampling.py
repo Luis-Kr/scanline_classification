@@ -13,7 +13,8 @@ def segment_subsampling(pcd: np.ndarray,
                         segment_indices: int,
                         x_col: int,
                         y_col: int,
-                        z_col: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                        z_col: int,
+                        height_min: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Subsamples a segment of a point cloud.
 
@@ -34,7 +35,7 @@ def segment_subsampling(pcd: np.ndarray,
     # Extract the relevant columns for the segment
     x_segment = pcd[segment_indices, x_col]
     y_segment = pcd[segment_indices, y_col]
-    z_segment = pcd[segment_indices, z_col]
+    z_segment = pcd[segment_indices, z_col] + height_min
     xyz_segment = np.column_stack((x_segment, y_segment, z_segment))
     
     # Create empty arrays to store the nearest neighbor coordinates
@@ -120,14 +121,16 @@ def calculate_skewness(data: np.ndarray) -> float:
 
 @njit()
 def calculate_attributes(segment):
-    attributes = np.zeros(7)
+    attributes = np.zeros(9)
     attributes[0] = np.nanmean(segment)
     attributes[1] = np.nanvar(segment)
     attributes[2] = np.nanstd(segment)
     attributes[3] = np.nanmedian(segment)
     attributes[4] = np.nanpercentile(segment, 2)
     attributes[5] = np.nanpercentile(segment, 98)
-    attributes[6] = calculate_skewness(segment)#.astype(np.float64)
+    attributes[6] = np.nanpercentile(segment, 25)
+    attributes[7] = np.nanpercentile(segment, 75)
+    attributes[8] = calculate_skewness(segment)#.astype(np.float64)
     return attributes
 
 
@@ -138,13 +141,13 @@ def calculate_segment_attributes(pcd: np.ndarray,
                                  label_col: int,
                                  columns) -> Tuple[np.ndarray, np.ndarray]:
     # Create an empty array to store the attributes
-    segment_attributes = np.zeros((1, (len(columns) * 7)+2))
+    segment_attributes = np.zeros((1, (len(columns) * 9)+2))
     gini_impurity_segment = np.empty(1)
 
     # Calculate the attributes for each column
     for i, col in enumerate(columns):
         segment = pcd[segment_indices, col]
-        segment_attributes[0, i*7:i*7+7] = calculate_attributes(segment)
+        segment_attributes[0, i*9:i*9+9] = calculate_attributes(segment)
         
     # Segment ID
     segment_id_segment = pcd[segment_indices, segment_id_col][0] # All segment IDs are the same
@@ -196,6 +199,10 @@ def process_segments(pcd: np.ndarray,
                      segment_id_col: int,
                      label_col: int,
                      segment_ids_col: int) -> np.ndarray:
+    # Subtract the minimum height from the z column (!) -> affects xyz_segment..._nn
+    height_min = np.nanmin(pcd[:, z_col])
+    pcd[:, z_col] -= height_min
+    
     # Sort the point cloud by segment id
     sorted_indices = np.argsort(pcd[:,segment_ids_col])
     
@@ -215,7 +222,8 @@ def process_segments(pcd: np.ndarray,
                                                                                             segment_indices=segment_indices,
                                                                                             x_col=x_col,
                                                                                             y_col=y_col,
-                                                                                            z_col=z_col)
+                                                                                            z_col=z_col,
+                                                                                            height_min=height_min)
         
         segment_attributes, gini_impurity_segment, num_points = calculate_segment_attributes(pcd=pcd,
                                                                                             segment_indices=segment_indices,

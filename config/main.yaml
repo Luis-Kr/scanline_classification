@@ -1,26 +1,30 @@
 defaults:
   - _self_
   - a01_curvature: ../analysis/a01_curvature
+  - training: ../training
+  - attribute: ../attributes
   - paths: ../paths
 
 # Path where the point cloud is stored
-pcd_path: data/03_labeled/SiteD_RHV_01_Labeled.txt
+pcd_path: data/03_labeled/SiteD_RHV_05_Labeled.txt
 
 # Path for saving the output of the module
-dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/gini_impurity
+dst_dir: /DATA/Luis/thesis/scanline_classification/data/full_resolution_classification
 
 # Compression of the output point clouds (True: .npz-files, False: .txt-files)
 # Compression needs more time but less space 
 output_compressed: False 
 
 # Attributes to be calculated that are taken into account for training the random forest model
-attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
-#attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
+#attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
+#attributes: ["z","intensity","red","green","blue","rho","vert_angle","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
+attributes: ["intensity","red","green","blue","vert_angle","slope","curvature","roughness","nz"]
+
 
 # Scanline extraction
 sce:
   # Threshold (deg) value for splitting the scanlines (in relation to the vertical movement of the scanner)
-  threshold: 100
+  threshold: 80
   # Bin size (meters) being used for density estimation
   bin_size: 0.5
   # Number of nearest neighbors being used for the density estimation
@@ -31,7 +35,7 @@ sce:
   z_offset: 30 
   # If True, the "real" 3D normals are calculated using estimates of the local surface defined by a point and its neighbors
   # Will slow down the process!
-  calculate_normals: False
+  calculate_normals: True
   # Whether or not the point cloud should be saved after this intermediate processing step
   save_pcd: False
 
@@ -48,14 +52,14 @@ scs:
 # Subsampling
 scsb:
   save_pcd: False
-  save_gini_impurity: True
+  save_gini_impurity: False
 
 # Segment classification
 sgcl:
   save_pcd: False
 
 # Whether to run the classification or not
-run_classification: False
+run_classification: True
 
 # Whether to clear the logs or not
 clear_logs: False
@@ -120,7 +124,7 @@ pcd_col_fmt:
   nz: "%1.4f"
 
 # Fixed statistics (changing the variables will not affect the output; keep the values as they are)
-statistics: ["mean","var","std","median","perc2nd","perc98th","skewness"]
+statistics: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]
 
 # Fixed attributes
 xyz_attributes: ["x_median_nn","y_median_nn","z_median_nn","x_perc2nd_nn","y_perc2nd_nn","z_perc2nd_nn","x_perc98th_nn","y_perc98th_nn","z_perc98th_nn"] 
