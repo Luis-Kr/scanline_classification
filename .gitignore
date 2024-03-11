@@ -10,3 +10,4 @@ scanline_classification/container/
 scanline_classification/classification/RF_training.py
 scanline_classification/analysis/a01_curvature.ipynb
 scanline_classification/analysis/02_feature_importance.ipynb
+models/xgb_training/hyperparameter_tuning/xgb_model_mean_statistics.joblib
