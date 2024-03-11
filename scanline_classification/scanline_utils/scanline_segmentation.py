@@ -121,7 +121,8 @@ def calculate_slope(scanline_xyz: np.ndarray,
 
 @njit()
 def slope_lstsq_local_neighborhood(points_left_side: np.ndarray, 
-                                   points_right_side: np.ndarray) -> np.ndarray: 
+                                   points_right_side: np.ndarray,
+                                   center_point: np.ndarray) -> np.ndarray: 
     neighborhood_points = np.concatenate((points_left_side, points_right_side))
     
     # Extract the rho-values from the neighborhood points
@@ -138,6 +139,15 @@ def slope_lstsq_local_neighborhood(points_left_side: np.ndarray,
     
     # Calculate the slope in degrees
     slope_deg = np.rad2deg(np.arctan(lstsq_solution[0]))
+    
+    # Calculate the distance from the center point to the regression line
+    # m1, c1 = lstsq_solution
+    # x0, y0 = center_point
+    # m2 = -1/m1
+    # c2 = y0 - m2*x0
+    # l_x = (c1 - c2) / (m1 - m2)
+    # l_y = m1 * l_x + c1
+    # distance_to_line = np.sqrt((x0 - l_x)**2 + (y0 - l_y)**2)
     
     return slope_deg
 
@@ -165,12 +175,14 @@ def calculate_slope_least_squares(scanline: np.ndarray,
     
     # Calculate the slope using the least-squares method for each point in the scanline
     slope = np.zeros(scanline.shape[0])
+    distances_to_line = np.zeros(scanline.shape[0])
     for idx in range(scanline.shape[0]):
         n = int(idx + max_num_neighbors)
         slope[idx] = slope_lstsq_local_neighborhood(points_left_side=pad_scanline_XY[n-num_neighbors[idx]:n], 
-                                                    points_right_side=pad_scanline_XY[n+1:n+num_neighbors[idx]+1])
+                                                                            points_right_side=pad_scanline_XY[n+1:n+num_neighbors[idx]+1],
+                                                                            center_point=scanline_XY[idx])
     
-    return slope
+    return slope, distances_to_line
 
 
 @njit()
@@ -252,9 +264,9 @@ def calculate_roughness(scanline_xyz: np.ndarray,
     roughness = np.zeros(scanline_xyz.shape[0])
     for idx in range(scanline_xyz.shape[0]):
         n = int(idx + max_num_neighbors)
-        roughness[idx] = np.nanvar(calculate_distances_point_lines(center_point=padded_scanline[n], 
-                                                                   points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
-                                                                   points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
+        roughness[idx] = np.nanmean(calculate_distances_point_lines(center_point=padded_scanline[n], 
+                                                                     points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
+                                                                     points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
     
     return roughness
 
@@ -294,7 +306,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         k_neighbors *= neighborhood_multiplier
         
         # Smoothing with constant k
-        #k_neighbors = np.ones(scanline.shape[0]) * 20
+        #k_neighbors = np.ones(scanline.shape[0]) * neighborhood_multiplier
         
         # Extract the x, y, z coordinates from the scanline (numba does not support indexing with multiple columns)
         x = scanline[:, x_col]
@@ -315,13 +327,13 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                         rho_col=rho_col)
         
         if least_squares_method:
-            slope_i = calculate_slope_least_squares(scanline=scanline,
-                                                    num_neighbors=k_neighbors,
-                                                    x_col= x_col,
-                                                    y_col= y_col,
-                                                    max_num_neighbors=max_num_neighbors,
-                                                    X_col=horiz_angle_col,
-                                                    Y_col=rho_col)
+            slope_i, _ = calculate_slope_least_squares(scanline=scanline,
+                                                                num_neighbors=k_neighbors,
+                                                                x_col= x_col,
+                                                                y_col= y_col,
+                                                                max_num_neighbors=max_num_neighbors,
+                                                                X_col=horiz_angle_col,
+                                                                Y_col=rho_col)
         else:
             slope_i = calculate_slope(scanline_xyz=scanline, 
                                       padded_scanline=padded_scanline,
@@ -345,7 +357,9 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         slope[scanline_indices] = slope_i
         curvature[scanline_indices] = curvature_i
         roughness[scanline_indices] = roughness_i
-
+        
+    #roughness = (roughness - np.min(roughness)) / (np.max(roughness) - np.min(roughness))
+    
     return rho_diff, slope, curvature, roughness
 
 
