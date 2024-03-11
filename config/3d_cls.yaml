@@ -1,0 +1,13 @@
+input_file_path: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/03_labeled/SiteA_Scans_Global_I_RGB_RHV/SiteA_RHV_01_Labeled.txt"
+output_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification"
+model_path: "..."
+
+nghb_search_radius: 0.5
+voxel_size: 0.1
+
+classification: False
+save_cls_result: False
+
+sampling:
+  attributes_path: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel10cm/column_names/column_names.pkl"
+  files_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel10cm/attributes/validation"
