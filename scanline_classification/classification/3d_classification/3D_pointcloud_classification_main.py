@@ -19,6 +19,9 @@ from sklearn.metrics import confusion_matrix, classification_report
 import gzip
 import pandas as pd
 import pickle
+import functools
+import concurrent.futures
+import multiprocessing
 
 # Hydra and OmegaConf imports
 import hydra
@@ -247,26 +250,40 @@ def compute_attributes(attributes_dict: numba.typed.Dict,
 def compute_kdtree(pcd: np.ndarray, search_radius: float) -> Tuple[np.ndarray, np.ndarray]:
     # Build a k-d tree from point_clouds for efficient nearest neighbor search
     kdtree = cKDTree(pcd[:,:3])
+    
+    time.sleep(0.01)
+    
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Submit the function to the executor
+        future = executor.submit(kdtree.query_ball_point, pcd[:,:3], r=search_radius, workers=-1)
+        # Get the result (this will block until the function is done)
+        indices = future.result()
 
     # Query the k-d tree for the num_nearest_neighbors nearest neighbors of each point in point_clouds
-    indices = kdtree.query_ball_point(pcd[:,:3], r=search_radius, workers=6)
+    # print(f"Querying the k-d tree for the {search_radius} nearest neighbors of each point in the point cloud")
+    # indices = kdtree.query_ball_point(pcd[:,:3], r=search_radius, workers=4)
+    
+    time.sleep(0.01)
 
     # Flatten the list of lists
+    print(f"Flattening the list of lists")
     indices_flattened = np.concatenate(indices)
+    
+    time.sleep(0.01)
     
     # Compute the start indices of each sublist in the flattened list
     kdtree_lists_breakpoints = np.cumsum([0] + [len(lst) for lst in indices])
     
     return indices_flattened, kdtree_lists_breakpoints
         
-        
-def track_performance(cfg, output_dir):
-    performance_metrics_path = output_dir / "performance_report" / 'performance_metrics.csv'
+
+def track_performance(cfg):
+    performance_metrics_path = Path(cfg.cls_3d.output_dir) / "performance_report" / 'performance_metrics.csv'
     performance_metrics_path.parent.mkdir(parents=False, exist_ok=True)
     
     with open(performance_metrics_path, 'w', newline='') as file:
         writer = csv.writer(file, delimiter=',')
-        writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)", "Disk Usage (%)", "Network Activity (Bytes sent, Bytes received)"])
+        writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)"])
 
         while True:
             berlin_tz = pytz.timezone('Europe/Berlin')
@@ -274,15 +291,12 @@ def track_performance(cfg, output_dir):
             timestamp = berlin_time.strftime("%Y-%m-%d %H:%M:%S")
             cpu_usage = psutil.cpu_percent(interval=1)
             memory_usage_gb = psutil.Process().memory_info().rss / (1024 ** 3)
-            disk_usage = psutil.disk_usage('/').percent
-            net_io = psutil.net_io_counters()
-            network_activity = (net_io.bytes_sent, net_io.bytes_recv)
+            
+            print(f'Timestamp: {timestamp}, CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage_gb:.3f} GB')
+            writer.writerow([timestamp, cpu_usage, memory_usage_gb])
 
-            print(f'Timestamp: {timestamp}, CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage_gb:.3f} GB, Disk Usage: {disk_usage}%, Network Activity: {network_activity}')
-            writer.writerow([timestamp, cpu_usage, memory_usage_gb, disk_usage, network_activity])
-
-            file.flush()  # Flush the file buffer
-            os.fsync(file.fileno())  # Ensure it's written to disk
+            file.flush()  
+            os.fsync(file.fileno()) 
             
             time.sleep(0.01)
 
@@ -353,15 +367,15 @@ def classification(cfg: DictConfig,
 #         #process.terminate()
 
 
+
 @hydra.main(version_base=None, config_path="../../../config", config_name="main")
 def main(cfg: DictConfig):
     start_time = time.time()
     output_dir = Path(cfg.cls_3d.output_dir) / f"radius{int(cfg.cls_3d.nghb_search_radius*100)}cm_voxel{int(cfg.cls_3d.voxel_size*100)}cm"
-    output_dir.mkdir(parents=False, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     # Start tracking memory usage
-    #threading.Thread(target=track_memory, daemon=True).start()
-    threading.Thread(target=track_performance, args=(cfg,output_dir,), daemon=True).start()
+    threading.Thread(target=track_performance, args=(cfg,), daemon=True).start()
     #threading.Thread(target=track_energy, args=(cfg,), daemon=True).start()
     
     # Clear the hydra config cache
@@ -375,10 +389,15 @@ def main(cfg: DictConfig):
     
     print(f"Compute kdtree")
     indices_flattened, kdtree_lists_breakpoints = compute_kdtree(pcd_centered, cfg.cls_3d.nghb_search_radius)
+    print(f"Compute scanner LOS")
     scanner_LOS = compute_scanner_LOS(pcd_centered)
+    print(f"Initialize attributes")
     attributes = initialize_attributes(cfg, pcd_centered)
+    print(f"Compute covariance attributes")
     columns = columns_for_numba(cfg)
+    print(f"Compute attributes")
     normals, roughness, curvature, zenith_angle = compute_covariance_attributes(indices_flattened, kdtree_lists_breakpoints, pcd_centered, scanner_LOS)
+    print(f"Compute attributes")
     attributes_dict = compute_attributes(attributes, columns, indices_flattened, kdtree_lists_breakpoints, pcd_centered, zenith_angle, roughness, normals, curvature)
     
     # Save the normals and roughness to a file along with xyz
@@ -395,7 +414,7 @@ def main(cfg: DictConfig):
     column_names_dir = output_dir / "column_names"
     column_names_dir.mkdir(parents=False, exist_ok=True)
     
-    # Save the column names to a oickle file 
+    # Save the column names to a pickle file 
     with open(column_names_dir / "column_names.pkl", 'wb') as f:
         pickle.dump(column_names, f)
     
@@ -419,7 +438,17 @@ def main(cfg: DictConfig):
     end_time = time.time()
     execution_time = end_time - start_time
     print("Execution time of main is: ", execution_time, "seconds")
+    
+    # Save the execution time
+    time_df = pd.DataFrame(data={"execution_time": [execution_time],
+                                 "radius (cm)": [cfg.cls_3d.nghb_search_radius*100],
+                                 "voxel_size (cm)": [cfg.cls_3d.voxel_size*100]})
+    
+    time_df_out_path = output_dir / "performance_report"
+    time_df_out_path.mkdir(parents=False, exist_ok=True)
+    time_df.to_csv(time_df_out_path / "execution_time.csv")
+
 
 if __name__=='__main__':
-    set_num_threads(int(5))
+    set_num_threads(int(6))
     main()

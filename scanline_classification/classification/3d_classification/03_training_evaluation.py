@@ -14,6 +14,7 @@ from numba import njit, prange
 import time
 import random
 from pprint import pprint
+import gzip
 
 import hydra
 from hydra import compose, initialize
@@ -25,7 +26,7 @@ import warnings
 # Ignore warnings
 warnings.filterwarnings("ignore")
 
-sys.path.append(str(Path(__file__).parent.parent.absolute()))
+sys.path.append(str(Path(__file__).parent.parent.parent.absolute()))
 
 import utils.logger as lgr
 
@@ -101,16 +102,10 @@ def training(cfg, logger):
     training_data = pd.read_csv(cfg.training.training_data_path, sep=",", header=0)
     
     # Get a list of all files in the directory
-    files_siteA = list(Path(cfg.training.training_data_subsampled_dir).glob('SiteA*.txt')) 
-    files_siteB = list(Path(cfg.training.training_data_subsampled_dir).glob('SiteB*.txt')) 
-
-    # Shuffle the files
-    np.random.seed(42)
-    random.shuffle(files_siteA, random.seed(2))
-    random.shuffle(files_siteB, random.seed(4))
-
-    # Select random pairs of files
-    selected_files = [[files_siteA[i], files_siteB[i]] for i in np.random.random_integers(0, 5, 3)]
+    files_siteA = sorted(list(Path(cfg.training.training_data_subsampled_dir).glob('SiteA*.gz')))
+    files_siteB = sorted(list(Path(cfg.training.training_data_subsampled_dir).glob('SiteB*.gz')))
+    
+    selected_files = [ [files_siteA[4], files_siteB[0]], [files_siteA[5], files_siteB[2]], [files_siteA[1], files_siteB[4]] ]
     
     # Initialize list to store training reports
     cls_training_report_dfs = []
@@ -137,24 +132,10 @@ def training(cfg, logger):
             (training_data['path'] != file_name1) &
             (training_data['path'] != file_name2)
         ]
-        
-        # Get attributes to consider
-        if not cfg.attribute.condsider_all_features_and_stats:
-            cols_to_consider = cfg.attribute.best_overall.cols_to_consider
-            stats_to_consider = cfg.attribute.best_overall.stats_to_consider
-            attributes_to_consider = [f"{i}_{j}" for i in cols_to_consider for j in stats_to_consider]
-            
-            # Get training data
-            x_train = training_data_subset[attributes_to_consider]
-            y_train = training_data_subset['label']   
-        else:
-            cols_to_consider = cfg.attribute.all.cols_to_consider
-            stats_to_consider = cfg.attribute.all.stats_to_consider
-            attributes_to_consider = [f"{i}_{j}" for i in cols_to_consider for j in stats_to_consider]
-            
-            # Get training data
-            x_train = training_data_subset[attributes_to_consider]
-            y_train = training_data_subset['label']  
+       
+        # Get training data
+        x_train = training_data_subset.drop(columns=['label', 'label_names', 'path'])
+        y_train = training_data_subset['label']  
         
         logger.info(f"Training data shape: {x_train.shape}")
         
@@ -173,7 +154,7 @@ def training(cfg, logger):
                      5: "low vegetation"}
         
         # Load attribute statistics
-        with open(cfg.training.attribute_statistics_path, 'rb') as f:
+        with open(cfg.cls_3d.sampling.attributes_path, 'rb') as f:
                 attribute_statistics = pickle.load(f)
         
         # Test the model
@@ -182,39 +163,26 @@ def training(cfg, logger):
             logger.info(f"Testing on {file_path}")
             
             # Load test data
-            test_data_subsampled = pd.read_csv(file_path, sep=" ", header=None, names=attribute_statistics)
+            pcd_attributes_file = gzip.GzipFile(file_path, "r")
+            pcd_attributes = np.load(pcd_attributes_file)
+        
+            # Create a DataFrame from the attributes
+            test_data_subsampled = pd.DataFrame(pcd_attributes, columns=attribute_statistics)
             filename = Path(file_path).stem
-            segmentation_pcds_dir = Path(cfg.training.segmentation_data_dir)
-            file_to_search = "_".join(Path(filename).stem.split("_")[0:3])
-            segmentation_pcd = segmentation_pcds_dir.glob(f"{file_to_search}*").__next__()
-            
-            logger.info(f'Loading full resolution point cloud: {segmentation_pcd}')
-            
-            # Load full resolution pcd
-            pcd_fr = np.loadtxt(segmentation_pcd, delimiter=' ')
             
             # Map label names
             test_data_subsampled['label_names'] = test_data_subsampled['label'].map(label_names)
             
             # Get test data
-            x_test = test_data_subsampled[attributes_to_consider]
+            x_test = test_data_subsampled.drop(columns=['x', 'y', 'z', 'label', 'label_names'])
+            y_test = test_data_subsampled['label'] 
             
             # Make predictions
             y_pred = prediction(xgb_model, x_test, logger)
             
-            # Get indices per segment
-            pcd_sorted, indices_per_segment = get_indices_per_segment(cfg, pcd_fr)
-            
-            # Unfold labels
-            fr_predicted_labels = unfold_labels(pcd=pcd_sorted, pcd_subs_predicted_labels=y_pred, indices_per_segment=indices_per_segment)
-            
-            # Get validation data
-            validation_pred = fr_predicted_labels
-            validation_test = pcd_sorted[:, cfg.pcd_col.label]
-            
             # Evaluate model
-            cnf_matrix_fr, cls_report_fr = evaluate_model(y_pred=validation_pred, 
-                                                          y_test=validation_test,
+            cnf_matrix_fr, cls_report_fr = evaluate_model(y_pred=y_pred, 
+                                                          y_test=y_test,
                                                           logger=logger)
             
             # Write cls_report_fr to a pandas dataframe 
@@ -232,6 +200,14 @@ def training(cfg, logger):
             np.savetxt(cnf_matrix_path / f"id{cfg.training.id}__{filename}__nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_confusion_matrix_testing.csv", 
                        cnf_matrix_fr, delimiter=',', fmt='%u')
             
+            # Save x,y,z labels and predicted labels as numpy array
+            save_classified_pcd = Path(cfg.training.output_dir) / "classified_pcd" / "testing"
+            save_classified_pcd.mkdir(parents=True, exist_ok=True)
+            pcd_out = np.c_[test_data_subsampled['x'], test_data_subsampled['y'], test_data_subsampled['z'], y_test, y_pred]
+            
+            logger.info(f"Saving classified point cloud to: {save_classified_pcd}")
+            np.savetxt(save_classified_pcd / f"{filename}_xyz_labels_predicted_labels.txt", pcd_out, delimiter=' ', fmt='%1.4f %1.4f %1.4f %u %u')
+        
             # Append the cls_report_fr_df to the list
             cls_training_report_dfs.append(cls_report_fr_df)
     
@@ -244,61 +220,44 @@ def training(cfg, logger):
     cls_training_report.to_csv(classification_report_dir / f"id{cfg.training.id}_nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_cls_report_testing.csv")
     
     
-    return cls_training_report, xgb_model, attributes_to_consider, label_names
+    return cls_training_report, xgb_model, attribute_statistics, label_names
 
 
 
-def validation(cfg, model, attributes_to_consider, label_names, logger):
+def validation(cfg, model, attribute_statistics, label_names, logger):
     logger.info("::: Validation :::")
     
     # Initialize list to store validation reports
     cls_validation_report_dfs = []
-    
-    # Load attribute statistics
-    with open(cfg.training.attribute_statistics_path, 'rb') as f:
-            attribute_statistics = pickle.load(f)
-
 
     # Evaluate the model on the validation data
-    for i, file_path in enumerate(Path(cfg.training.validation_data_dir).glob('*.txt')):
+    for i, file_path in enumerate(Path(cfg.training.validation_data_dir).glob('*.gz')):
         
         logger.info(":: Prediction on the validation data ::")
-        logger.info(f"Validation data shape: {pd.read_csv(file_path, sep=' ', header=None, names=attribute_statistics).shape}")
         logger.info(f"Validation on {file_path}")
         
         # Load validation data
-        validation_data_subsampled = pd.read_csv(file_path, sep=" ", header=None, names=attribute_statistics)
-        filename = Path(file_path).stem
-        segmentation_pcds_dir = Path(cfg.training.segmentation_data_dir)
-        file_to_search = "_".join(Path(filename).stem.split("_")[0:3])
-        segmentation_pcd = segmentation_pcds_dir.glob(f"{file_to_search}*").__next__()
+        pcd_attributes_file = gzip.GzipFile(file_path, "r")
+        pcd_attributes = np.load(pcd_attributes_file)
         
-        logger.info(f'Loading full resolution point cloud: {segmentation_pcd}')
-        pcd_fr = np.loadtxt(segmentation_pcd, delimiter=' ')
+        # Create a DataFrame from the attributes
+        validation_data_subsampled = pd.DataFrame(pcd_attributes, columns=attribute_statistics)
+        filename = Path(file_path).stem
         
         # Map label names
         validation_data_subsampled['label_names'] = validation_data_subsampled['label'].map(label_names)
         
         # Get test data
-        x_validation = validation_data_subsampled[attributes_to_consider]
+        x_validation = validation_data_subsampled.drop(columns=['x', 'y', 'z', 'label', 'label_names'])
+        y_validation = validation_data_subsampled['label'] 
         
         # Make predictions
         y_pred = prediction(model, x_validation, logger)
         
-        # Get indices per segment
-        pcd_sorted, indices_per_segment = get_indices_per_segment(cfg, pcd_fr)
-        
-        # Unfold labels
-        fr_predicted_labels = unfold_labels(pcd=pcd_sorted, pcd_subs_predicted_labels=y_pred, indices_per_segment=indices_per_segment)
-        
-        # Get validation data
-        validation_pred = fr_predicted_labels
-        validation_test = pcd_sorted[:, cfg.pcd_col.label]
-        
         # Evaluate model
-        cnf_matrix_validation, cls_report_validation = evaluate_model(y_pred=validation_pred, 
-                                                                    y_test=validation_test,
-                                                                    logger=logger)
+        cnf_matrix_validation, cls_report_validation = evaluate_model(y_pred=y_pred, 
+                                                                      y_test=y_validation,
+                                                                      logger=logger)
         
         # Write cls_report_fr to a pandas dataframe 
         cls_validation_report_df = pd.DataFrame(cls_report_validation).transpose()
@@ -315,6 +274,13 @@ def validation(cfg, model, attributes_to_consider, label_names, logger):
         np.savetxt(cnf_matrix_path / f"id{cfg.training.id}__{filename}__nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_confusion_matrix_validation.csv", 
                     cnf_matrix_validation, delimiter=',', fmt='%u')
         
+        # Save x,y,z labels and predicted labels as numpy array
+        save_classified_pcd = Path(cfg.training.output_dir) / "classified_pcd" / "validation"
+        save_classified_pcd.mkdir(parents=True, exist_ok=True)
+        pcd_out = np.c_[validation_data_subsampled['x'], validation_data_subsampled['y'], validation_data_subsampled['z'], y_validation, y_pred]
+        
+        logger.info(f"Saving classified point cloud to: {save_classified_pcd}")
+        np.savetxt(save_classified_pcd / f"{filename}_xyz_labels_predicted_labels.txt", pcd_out, delimiter=' ', fmt='%1.4f %1.4f %1.4f %u %u')
         
         # Append the cls_report_fr_df to the list
         cls_validation_report_dfs.append(cls_validation_report_df)
@@ -339,7 +305,7 @@ def write_to_csv(df, path):
 
 
 
-@hydra.main(version_base=None, config_path="../../config", config_name="main")
+@hydra.main(version_base=None, config_path="../../../config", config_name="main")
 def main(cfg: DictConfig):
     # Clear the hydra config cache
     GlobalHydra.instance().clear()
@@ -351,8 +317,8 @@ def main(cfg: DictConfig):
     time_start_main = time.time()
 
     # Run the training and validation
-    cls_report_fr_dfs, model, attributes_to_consider, label_names = training(cfg, logger)
-    cls_validation_report_df_out = validation(cfg, model, attributes_to_consider, label_names, logger)
+    cls_report_fr_dfs, model, attribute_statistics, label_names = training(cfg, logger)
+    cls_validation_report_df_out = validation(cfg, model, attribute_statistics, label_names, logger)
 
     # Prepare the output directory
     all_results_dir = Path(cfg.training.output_dir) / "all_results"

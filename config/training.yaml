@@ -1,0 +1,24 @@
+training_data_path: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel10cm/attributes/training/merged/training_data_merged_frac.csv"
+training_data_subsampled_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel10cm/attributes/training"
+validation_file_frac: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel10cm/attributes/validation/merged/validation_data_merged_frac.csv"
+validation_data_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel10cm/attributes/validation"
+#segmentation_data_dir: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/scanline_segmentation"
+#attribute_statistics_path: "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/scanline_subsampling/attribute_statistics/SiteA_RHV_01_Labeled.pkl"
+output_dir_model: "/DATA/Luis/thesis/scanline_classification/models/xgb_training/best_model_v02"
+output_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/classification_result"
+
+n_estimators: 100 #200
+max_depth: 3 #4
+learning_rate: 0.3 #0.1
+
+id: 1
+
+class_to_drop: 0
+
+drop_col: none
+col_to_consider: None
+statistics: "mean"
+statistics_all: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]
+
+statistics_feat_importance: True
+coarse: False
