@@ -1,4 +1,4 @@
-rf_model: data/models/random_forest_98features.joblib
+rf_model: models/xgb_training/best_model_v02/xgb_model.joblib
 
 sce: 
   dst_dir: scanline_extraction/

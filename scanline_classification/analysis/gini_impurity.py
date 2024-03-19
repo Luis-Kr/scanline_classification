@@ -1,9 +1,9 @@
 import subprocess
 from itertools import product
 
-curvature_threshold = [20, 30, 40, 50, 60]
-std_multiplier = [1, 100, 200, 300]
-neighborhood_multiplier = [1, 2, 3, 4]
+curvature_threshold = [20, 30, 40, 50, 60, 70]
+std_multiplier = [1, 15, 25, 35, 50, 65, 75, 85, 100]  #[1, 100, 200, 300]
+neighborhood_multiplier = [1, 1.25, 1.5, 1.75, 2] #[1, 2, 3, 4]
 
 # Generate all combinations
 combinations = list(product(curvature_threshold, std_multiplier, neighborhood_multiplier))

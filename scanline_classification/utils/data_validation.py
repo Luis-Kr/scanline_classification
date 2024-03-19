@@ -52,7 +52,7 @@ def prepare_attributes_and_format(cfg: DictConfig) -> Tuple[str, str, str, List[
                                                     pcd_col=cfg.pcd_col,
                                                     pcd_col_fmt=cfg.pcd_col_fmt)
     
-    fmt_scsb = " ".join(fmt for fmt in column_fmt for _ in range(7)) + " " + "%u" + " " + "%u" #7 because of the number of statistics
+    fmt_scsb = " ".join(fmt for fmt in column_fmt for _ in range(9)) + " " + "%u" + " " + "%u" #9 because of the number of statistics
     fmt_scsb = " ".join(["%1.4f"] * len(cfg.xyz_attributes)) + " " + fmt_scsb
 
     attribute_statistics = [f"{attribute}_{statistic}" for attribute in cfg.attributes for statistic in cfg.statistics]
@@ -68,11 +68,11 @@ def prepare_attributes_and_format(cfg: DictConfig) -> Tuple[str, str, str, List[
         
         
 def check_attributes_and_normals(cfg: DictConfig):
-    if cfg.sce.calculate_normals == False and all(x in cfg.attributes for x in ["nx", "ny", "nz"]):
+    if cfg.sce.calculate_normals == False and any(x in cfg.attributes for x in ["nx", "ny", "nz"]):
         sys.exit("""Error: The attributes contain 'nx', 'ny', and 'nz'. 
                  However, the calculate_normals is set to False. 
                  Please set the calculate_normals to True or remove 'nx', 'ny', and 'nz' from the attributes.""")
-    elif cfg.sce.calculate_normals == True and not all(x in cfg.attributes for x in ["nx", "ny", "nz"]):
+    elif cfg.sce.calculate_normals == True and not any(x in cfg.attributes for x in ["nx", "ny", "nz"]):
         sys.exit("""Error: The attributes do not contain 'nx', 'ny', and 'nz'. \n
                     However, the calculate_normals is set to True. \n
                     Please set the calculate_normals to False or add 'nx', 'ny', and 'nz' to the attributes.""")
