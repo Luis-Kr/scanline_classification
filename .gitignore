@@ -6,7 +6,4 @@ outputs/
 .DS_Store
 scanline_classification/utils/__pycache__/scanline_extraction.cpython-310.pyc
 scanline_classification/classification/feature_importance.ipynb
-scanline_classification/container/
 scanline_classification/classification/RF_training.py
-scanline_classification/analysis/a01_curvature.ipynb
-scanline_classification/analysis/02_feature_importance.ipynb
