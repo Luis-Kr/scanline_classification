@@ -6,14 +6,14 @@ training_data_subsampled_dir = "/DATA/Luis/thesis/scanline_classification/data/d
 validation_data_dir = "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/validation"
 segmentation_data_dir = "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/scanline_segmentation"
 attribute_statistics_path = "/DATA/Luis/thesis/scanline_classification/data/data_for_training_final_SM2CT20NM3_v02/scanline_subsampling/attribute_statistics/SiteA_RHV_01_Labeled.pkl"
-output_dir = "/DATA/Luis/thesis/scanline_classification/data/final_results/0_all_attributes_performance_withtraining"
-#output_dir = "/DATA/Luis/thesis/scanline_classification/data/final_results/2_hyperparameter_testing/fine"
+#output_dir = "/DATA/Luis/thesis/scanline_classification/data/final_results/1_best_overall_performance"
+output_dir = "/DATA/Luis/thesis/scanline_classification/data/final_results/2_hyperparameter_testing/fine"
 
-n_estimators = [200] #[1, 25, 50, 75, 100, 125, 150, 175, 200, 300, 400]
-max_depth = [6] #[1, 2, 3, 4, 5, 6, 7, 8, 9]  
-learning_rate = [0.3] #[0.3] 
+n_estimators = [1, 25, 50, 75, 100, 125, 150, 175, 200, 300, 400]
+max_depth = [1, 2, 3, 4, 5, 6, 7, 8, 9]  
+learning_rate = [0.3] 
 
-condsider_all_features_and_stats = True
+condsider_all_features_and_stats = False
 
 # Generate all combinations
 combinations = list(product(n_estimators, max_depth, learning_rate))

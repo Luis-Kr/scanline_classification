@@ -265,6 +265,16 @@ def training(cfg, logger):
             np.savetxt(cnf_matrix_path / f"id{cfg.training.id}__{filename}__nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_confusion_matrix_testing.csv", 
                        cnf_matrix_fr, delimiter=',', fmt='%u')
             
+            
+            # Save x,y,z labels and predicted labels as numpy array
+            # save_classified_pcd = Path(cfg.training.output_dir) / "classified_pcd" / "testing"
+            # save_classified_pcd.mkdir(parents=True, exist_ok=True)
+            # pcd_out = np.c_[pcd_fr[:,0], pcd_fr[:,1], pcd_fr[:,2], validation_test, validation_pred]
+            
+            # logger.info(f"Saving classified point cloud to: {save_classified_pcd}")
+            # np.savetxt(save_classified_pcd / f"{filename}_xyz_fr_labels_predicted_labels.txt", pcd_out, delimiter=' ', fmt='%1.4f %1.4f %1.4f %u %u')
+        
+            
             # Append the cls_report_fr_df to the list
             cls_training_report_dfs.append(cls_report_fr_df)
     
@@ -348,6 +358,13 @@ def validation(cfg, model, attributes_to_consider, label_names, logger):
         np.savetxt(cnf_matrix_path / f"id{cfg.training.id}__{filename}__nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_confusion_matrix_validation.csv", 
                     cnf_matrix_validation, delimiter=',', fmt='%u')
         
+        # Save x,y,z labels and predicted labels as numpy array
+        # save_classified_pcd = Path(cfg.training.output_dir) / "classified_pcd" / "validation"
+        # save_classified_pcd.mkdir(parents=True, exist_ok=True)
+        # pcd_out = np.c_[pcd_fr[:,0], pcd_fr[:,1], pcd_fr[:,2], validation_test, validation_pred]
+        
+        # logger.info(f"Saving classified point cloud to: {save_classified_pcd}")
+        # np.savetxt(save_classified_pcd / f"{filename}_xyz_fr_labels_predicted_labels.txt", pcd_out, delimiter=' ', fmt='%1.4f %1.4f %1.4f %u %u')
         
         # Append the cls_report_fr_df to the list
         cls_validation_report_dfs.append(cls_validation_report_df)
