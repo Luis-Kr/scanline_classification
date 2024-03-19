@@ -46,7 +46,7 @@ def compute_curvature(pcd_centered: np.ndarray,
             curvature[i] = 0
         
         # Compute the curvature as the ratio of the smallest eigenvalue to the sum of all eigenvalues
-        curvature[i] = np.min(eigenvalues) / np.sum(eigenvalues)
+        #curvature[i] = np.min(eigenvalues) / np.sum(eigenvalues)
         
     return curvature
 

@@ -1,21 +1,23 @@
 defaults:
   - _self_
   - a01_curvature: ../analysis/a01_curvature
+  - training: ../training
   - paths: ../paths
+  - cls_3d: ../3d_cls
 
 # Path where the point cloud is stored
 pcd_path: data/03_labeled/SiteD_RHV_01_Labeled.txt
 
 # Path for saving the output of the module
-dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/gini_impurity
+dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/test_output3
 
 # Compression of the output point clouds (True: .npz-files, False: .txt-files)
 # Compression needs more time but less space 
 output_compressed: False 
 
 # Attributes to be calculated that are taken into account for training the random forest model
-attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
-#attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
+#attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
+attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
 
 # Scanline extraction
 sce:
@@ -31,7 +33,7 @@ sce:
   z_offset: 30 
   # If True, the "real" 3D normals are calculated using estimates of the local surface defined by a point and its neighbors
   # Will slow down the process!
-  calculate_normals: False
+  calculate_normals: True
   # Whether or not the point cloud should be saved after this intermediate processing step
   save_pcd: False
 
@@ -48,7 +50,7 @@ scs:
 # Subsampling
 scsb:
   save_pcd: False
-  save_gini_impurity: True
+  save_gini_impurity: False
 
 # Segment classification
 sgcl:

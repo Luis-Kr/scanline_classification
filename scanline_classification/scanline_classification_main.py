@@ -11,6 +11,13 @@ from typing import List, Tuple
 import sys
 import numba
 import pandas as pd
+import time
+import csv
+import os
+from datetime import datetime
+import pytz
+import psutil
+import threading
 
 # Hydra and OmegaConf imports
 import hydra
@@ -269,12 +276,37 @@ def scanline_subsampling(cfg: DictConfig,
     return pcd_processed_segments, indices_per_class
 
 
+def track_performance(cfg):
+    performance_metrics_path = Path(cfg.dst_dir) / "performance_report" / 'performance_metrics.csv'
+    performance_metrics_path.parent.mkdir(parents=False, exist_ok=True)
+    
+    with open(performance_metrics_path, 'w', newline='') as file:
+        writer = csv.writer(file, delimiter=',')
+        writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)"])
+
+        while True:
+            berlin_tz = pytz.timezone('Europe/Berlin')
+            berlin_time = datetime.now(berlin_tz)
+            timestamp = berlin_time.strftime("%Y-%m-%d %H:%M:%S")
+            cpu_usage = psutil.cpu_percent(interval=1)
+            memory_usage_gb = psutil.Process().memory_info().rss / (1024 ** 3)
+
+            print(f'Timestamp: {timestamp}, CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage_gb:.3f} GB')
+            writer.writerow([timestamp, cpu_usage, memory_usage_gb])
+
+            file.flush()  # Flush the file buffer
+            os.fsync(file.fileno())  # Ensure it's written to disk
+            
+            time.sleep(0.01)
 
 
 @hydra.main(version_base=None, config_path="../config", config_name="main")
 def main(cfg: DictConfig):
     # Clear the hydra config cache
     hydra.core.global_hydra.GlobalHydra.instance().clear()
+    
+    threading.Thread(target=track_performance, args=(cfg,), daemon=True).start()
+    start_time = time.time()
     
     # Check if cfg.output_dir is None (if yes, set it to the current working directory)
     if cfg.dst_dir == "None":
@@ -356,6 +388,18 @@ def main(cfg: DictConfig):
         else:
             logger.info(f'Saving the classified pcd: {str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.txt"))}')
             np.savetxt(str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.txt")), pcd_classified, fmt=fmt_pcd_classified, delimiter=' ')
+
+
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print("Execution time of main is: ", execution_time, "seconds")
+    
+    # Save the execution time
+    time_df = pd.DataFrame(data={"execution_time (s)": [execution_time]})
+    
+    time_df_out_path = cfg.dst_dir / "performance_report"
+    time_df_out_path.mkdir(parents=False, exist_ok=True)
+    time_df.to_csv(time_df_out_path / "execution_time.csv")
 
 if __name__=='__main__':
     main()
