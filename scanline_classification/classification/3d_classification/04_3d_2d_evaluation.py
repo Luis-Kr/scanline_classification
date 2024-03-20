@@ -60,8 +60,9 @@ def subsample_pcd(original_pcd: np.ndarray,
 
 
 def evaluate_testing_results(cfg, logger):
+    output_dir = Path(cfg.cls_3d.output_dir)
     
-    testing_results_dir_3d = Path(cfg.cls_3d.evaluation.testing_3d) 
+    testing_results_dir_3d = output_dir / cfg.cls_3d.evaluation.testing_3d
     testing_results_dir_2d = Path(cfg.cls_3d.evaluation.testing_2d) 
     
     cls_training_report_dfs = []
@@ -103,8 +104,8 @@ def evaluate_testing_results(cfg, logger):
         cls_report_2d_df['id'] = "2d"
         
         # Save the confusion matrix
-        cnf_matrix_path = Path(cfg.cls_3d.evaluation.output_dir) / "confusion_matrices_testing"
-        cnf_matrix_path.mkdir(parents=False, exist_ok=True)
+        cnf_matrix_path = output_dir / cfg.cls_3d.evaluation.output_dir / "confusion_matrices_testing"
+        cnf_matrix_path.mkdir(parents=True, exist_ok=True)
         np.savetxt(cnf_matrix_path / f"{filename}_3d_confusion_matrix_testing.csv", 
                    cnf_matrix_3d, delimiter=',', fmt='%u')
         np.savetxt(cnf_matrix_path / f"{filename}_2d_confusion_matrix_testing.csv", 
@@ -117,15 +118,16 @@ def evaluate_testing_results(cfg, logger):
     cls_training_report = pd.concat(cls_training_report_dfs)
     
     # Save the files
-    classification_report_dir = Path(cfg.cls_3d.evaluation.output_dir) / "classification_report_testing"
+    classification_report_dir = output_dir / cfg.cls_3d.evaluation.output_dir / "classification_report_testing"
     classification_report_dir.mkdir(parents=False, exist_ok=True)
     cls_training_report.to_csv(classification_report_dir / f"cls_report_testing_3d_2d.csv")
 
 
 
 def evaluate_validation_results(cfg, logger):
+    output_dir = Path(cfg.cls_3d.output_dir)
     
-    validation_results_dir_3d = Path(cfg.cls_3d.evaluation.validation_3d)
+    validation_results_dir_3d = output_dir / cfg.cls_3d.evaluation.validation_3d
     validation_results_dir_2d = Path(cfg.cls_3d.evaluation.validation_2d)
     
     cls_validation_report_dfs = []
@@ -167,8 +169,8 @@ def evaluate_validation_results(cfg, logger):
         cls_report_2d_df['id'] = "2d"
         
         # Save the confusion matrix
-        cnf_matrix_path = Path(cfg.cls_3d.evaluation.output_dir) / "confusion_matrices_validation"
-        cnf_matrix_path.mkdir(parents=False, exist_ok=True)
+        cnf_matrix_path = output_dir / cfg.cls_3d.evaluation.output_dir / "confusion_matrices_validation"
+        cnf_matrix_path.mkdir(parents=True, exist_ok=True)
         np.savetxt(cnf_matrix_path / f"{filename}_3d_confusion_matrix_validation.csv", cnf_matrix_3d, delimiter=',', fmt='%u')
         np.savetxt(cnf_matrix_path / f"{filename}_2d_confusion_matrix_validation.csv", cnf_matrix_2d, delimiter=',', fmt='%u')
         
@@ -179,7 +181,7 @@ def evaluate_validation_results(cfg, logger):
     cls_validation_report = pd.concat(cls_validation_report_dfs)
     
     # Save the files
-    classification_report_dir = Path(cfg.cls_3d.evaluation.output_dir) / "classification_report_validation"
+    classification_report_dir = output_dir / cfg.cls_3d.evaluation.output_dir / "classification_report_validation"
     classification_report_dir.mkdir(parents=False, exist_ok=True)
     cls_validation_report.to_csv(classification_report_dir / f"cls_report_validation_3d_2d.csv")
 
@@ -191,7 +193,7 @@ def main(cfg: DictConfig):
     GlobalHydra.instance().clear()
 
     # Set up the logger
-    logger = lgr.logger_setup('xgb_training', Path(cfg.training.output_dir) / "logs/xgb_training.log")
+    logger = lgr.logger_setup('xgb_training', Path(cfg.cls_3d.output_dir) / "logs/cls_comparison_3d_2d.log")
 
     # Record the start time
     time_start_main = time.time()

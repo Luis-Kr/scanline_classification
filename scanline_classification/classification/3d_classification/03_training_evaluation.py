@@ -98,12 +98,14 @@ def evaluate_model(y_pred, y_test, logger):
 
 
 def training(cfg, logger):
+    output_dir = Path(cfg.cls_3d.output_dir)
+    
     # Load the training data
-    training_data = pd.read_csv(cfg.training.training_data_path, sep=",", header=0)
+    training_data = pd.read_csv(output_dir / cfg.cls_3d.training.training_data_path, sep=",", header=0)
     
     # Get a list of all files in the directory
-    files_siteA = sorted(list(Path(cfg.training.training_data_subsampled_dir).glob('SiteA*.gz')))
-    files_siteB = sorted(list(Path(cfg.training.training_data_subsampled_dir).glob('SiteB*.gz')))
+    files_siteA = sorted(list((output_dir / cfg.cls_3d.training.training_data_subsampled_dir).glob('SiteA*.gz')))
+    files_siteB = sorted(list((output_dir / cfg.cls_3d.training.training_data_subsampled_dir).glob('SiteB*.gz')))
     
     selected_files = [ [files_siteA[4], files_siteB[0]], [files_siteA[5], files_siteB[2]], [files_siteA[1], files_siteB[4]] ]
     
@@ -154,7 +156,7 @@ def training(cfg, logger):
                      5: "low vegetation"}
         
         # Load attribute statistics
-        with open(cfg.cls_3d.sampling.attributes_path, 'rb') as f:
+        with open(output_dir / cfg.cls_3d.sampling.attributes_path, 'rb') as f:
                 attribute_statistics = pickle.load(f)
         
         # Test the model
@@ -195,13 +197,13 @@ def training(cfg, logger):
             cls_report_fr_df['id'] = cfg.training.id
             
             # Save the confusion matrix
-            cnf_matrix_path = Path(cfg.training.output_dir) / "confusion_matrices_testing"
-            cnf_matrix_path.mkdir(parents=False, exist_ok=True)
+            cnf_matrix_path = output_dir / "confusion_matrices_testing"
+            cnf_matrix_path.mkdir(parents=True, exist_ok=True)
             np.savetxt(cnf_matrix_path / f"id{cfg.training.id}__{filename}__nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_confusion_matrix_testing.csv", 
                        cnf_matrix_fr, delimiter=',', fmt='%u')
             
             # Save x,y,z labels and predicted labels as numpy array
-            save_classified_pcd = Path(cfg.training.output_dir) / "classified_pcd" / "testing"
+            save_classified_pcd = output_dir / "classified_pcd" / "testing"
             save_classified_pcd.mkdir(parents=True, exist_ok=True)
             pcd_out = np.c_[test_data_subsampled['x'], test_data_subsampled['y'], test_data_subsampled['z'], y_test, y_pred]
             
@@ -215,8 +217,8 @@ def training(cfg, logger):
     cls_training_report = pd.concat(cls_training_report_dfs)
     
     # Save the files
-    classification_report_dir = Path(cfg.training.output_dir) / "classification_report_testing"
-    classification_report_dir.mkdir(parents=False, exist_ok=True)
+    classification_report_dir = output_dir / "classification_report_testing"
+    classification_report_dir.mkdir(parents=True, exist_ok=True)
     cls_training_report.to_csv(classification_report_dir / f"id{cfg.training.id}_nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_cls_report_testing.csv")
     
     
@@ -226,12 +228,13 @@ def training(cfg, logger):
 
 def validation(cfg, model, attribute_statistics, label_names, logger):
     logger.info("::: Validation :::")
+    output_dir = Path(cfg.cls_3d.output_dir)
     
     # Initialize list to store validation reports
     cls_validation_report_dfs = []
 
     # Evaluate the model on the validation data
-    for i, file_path in enumerate(Path(cfg.training.validation_data_dir).glob('*.gz')):
+    for i, file_path in enumerate((output_dir / cfg.cls_3d.training.validation_data_dir).glob('*.gz')):
         
         logger.info(":: Prediction on the validation data ::")
         logger.info(f"Validation on {file_path}")
@@ -269,13 +272,13 @@ def validation(cfg, model, attribute_statistics, label_names, logger):
         cls_validation_report_df['id'] = cfg.training.id
     
         # Save the confusion matrix
-        cnf_matrix_path = Path(cfg.training.output_dir) / "confusion_matrices_validation"
-        cnf_matrix_path.mkdir(parents=False, exist_ok=True)
+        cnf_matrix_path = output_dir / "confusion_matrices_validation"
+        cnf_matrix_path.mkdir(parents=True, exist_ok=True)
         np.savetxt(cnf_matrix_path / f"id{cfg.training.id}__{filename}__nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_confusion_matrix_validation.csv", 
                     cnf_matrix_validation, delimiter=',', fmt='%u')
         
         # Save x,y,z labels and predicted labels as numpy array
-        save_classified_pcd = Path(cfg.training.output_dir) / "classified_pcd" / "validation"
+        save_classified_pcd = output_dir / "classified_pcd" / "validation"
         save_classified_pcd.mkdir(parents=True, exist_ok=True)
         pcd_out = np.c_[validation_data_subsampled['x'], validation_data_subsampled['y'], validation_data_subsampled['z'], y_validation, y_pred]
         
@@ -290,7 +293,7 @@ def validation(cfg, model, attribute_statistics, label_names, logger):
     cls_validation_report_df_out = pd.concat(cls_validation_report_dfs)
     
     # Save the files
-    classification_report_dir = Path(cfg.training.output_dir) / "classification_report_validation"
+    classification_report_dir = output_dir / "classification_report_validation"
     classification_report_dir.mkdir(parents=False, exist_ok=True)
     cls_validation_report_df_out.to_csv(classification_report_dir / f"id{cfg.training.id}_nestimators{cfg.training.n_estimators}_maxdepth{cfg.training.max_depth}_learningrate{cfg.training.learning_rate}_cls_report_validation.csv")
     
@@ -309,9 +312,10 @@ def write_to_csv(df, path):
 def main(cfg: DictConfig):
     # Clear the hydra config cache
     GlobalHydra.instance().clear()
+    output_dir = Path(cfg.cls_3d.output_dir)
 
     # Set up the logger
-    logger = lgr.logger_setup('xgb_training', Path(cfg.training.output_dir) / "logs/xgb_training.log")
+    logger = lgr.logger_setup('xgb_training', output_dir / "logs/xgb_training.log")
 
     # Record the start time
     time_start_main = time.time()
@@ -321,7 +325,7 @@ def main(cfg: DictConfig):
     cls_validation_report_df_out = validation(cfg, model, attribute_statistics, label_names, logger)
 
     # Prepare the output directory
-    all_results_dir = Path(cfg.training.output_dir) / "all_results"
+    all_results_dir = output_dir / "all_results"
     all_results_dir.mkdir(parents=True, exist_ok=True)
 
     # Define the output file paths

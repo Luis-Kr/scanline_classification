@@ -1,11 +1,14 @@
 import subprocess
 from pathlib import Path
 
-input_files_dir= "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/03_labeled/SiteD_Scans_Global_I_RGB_RHV"
-output_dir= "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification" #radius25cm_voxel2cm
+input_files_dir= "/DATA/Luis/thesis/scanline_classification/data/03_labeled"
+output_dir= "/DATA/Luis/thesis/scanline_classification/data/final_results/5_comparison_3d_scanline_approach/cls_3d"
 
-nghb_search_radius= 0.5
-voxel_size= 0.05
+nghb_search_radius=0.5
+voxel_size=0.05
+
+output_dir = output_dir + "/" + f"radius{nghb_search_radius}_voxel{voxel_size}"
+print(f"Output directory: {output_dir}")
 
 # Print the combinations
 for i, file in enumerate(Path(input_files_dir).rglob('*.txt')):

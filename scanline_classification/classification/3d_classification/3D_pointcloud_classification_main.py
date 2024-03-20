@@ -22,6 +22,9 @@ import pickle
 import functools
 import concurrent.futures
 import multiprocessing
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import utils.logger as lgr
 
 # Hydra and OmegaConf imports
 import hydra
@@ -279,11 +282,24 @@ def compute_kdtree(pcd: np.ndarray, search_radius: float) -> Tuple[np.ndarray, n
 
 def track_performance(cfg):
     performance_metrics_path = Path(cfg.cls_3d.output_dir) / "performance_report" / 'performance_metrics.csv'
-    performance_metrics_path.parent.mkdir(parents=False, exist_ok=True)
+    performance_metrics_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Record the start time
+    start_time = time.time()
     
-    with open(performance_metrics_path, 'w', newline='') as file:
+    # if the file does not exist, create it and write the header
+    if not performance_metrics_path.exists():
+        with open(performance_metrics_path, 'w', newline='') as file:
+            writer = csv.writer(file, delimiter=',')
+            writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)", "Method", "File", "Seconds_Since_Start", "Radius (cm)", "Voxel Size (cm)"])
+
+    # Open the file in append mode
+    with open(performance_metrics_path, 'a', newline='') as file:
         writer = csv.writer(file, delimiter=',')
-        writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)"])
+        
+        # Write the header only if the file is empty
+        if file.tell() == 0:
+            writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)", "Method", "File", "Seconds_Since_Start", "Radius (cm)", "Voxel Size (cm)"])
 
         while True:
             berlin_tz = pytz.timezone('Europe/Berlin')
@@ -291,12 +307,15 @@ def track_performance(cfg):
             timestamp = berlin_time.strftime("%Y-%m-%d %H:%M:%S")
             cpu_usage = psutil.cpu_percent(interval=1)
             memory_usage_gb = psutil.Process().memory_info().rss / (1024 ** 3)
-            
-            print(f'Timestamp: {timestamp}, CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage_gb:.3f} GB')
-            writer.writerow([timestamp, cpu_usage, memory_usage_gb])
+            seconds_since_start = time.time() - start_time  # Calculate the seconds since the start
+            radius = cfg.cls_3d.nghb_search_radius
+            voxel_size = cfg.cls_3d.voxel_size
 
-            file.flush()  
-            os.fsync(file.fileno()) 
+            print(f'Timestamp: {timestamp}, CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage_gb:.3f} GB')
+            writer.writerow([timestamp, cpu_usage, memory_usage_gb, "cls_3d", Path(cfg.cls_3d.input_file_path).stem, round(seconds_since_start,0), radius, voxel_size])
+
+            file.flush()  # Flush the file buffer
+            os.fsync(file.fileno())  # Ensure it's written to disk
             
             time.sleep(0.01)
 
@@ -346,7 +365,7 @@ def classification(cfg: DictConfig,
     # Output pcd with labels and classification result
     pcd_subsampled_classified = np.c_[pcd_subsampled[:, :3], labels, y_pred]
     
-    if cfg.save_cls_result:
+    if cfg.cls_3d.save_cls_result:
         cls_out = output_dir / "classified_pcd"
         cls_out.mkdir(parents=False, exist_ok=True)
         
@@ -371,8 +390,11 @@ def classification(cfg: DictConfig,
 @hydra.main(version_base=None, config_path="../../../config", config_name="main")
 def main(cfg: DictConfig):
     start_time = time.time()
-    output_dir = Path(cfg.cls_3d.output_dir) / f"radius{int(cfg.cls_3d.nghb_search_radius*100)}cm_voxel{int(cfg.cls_3d.voxel_size*100)}cm"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    #output_dir = Path(cfg.cls_3d.output_dir) / f"radius{int(cfg.cls_3d.nghb_search_radius*100)}cm_voxel{int(cfg.cls_3d.voxel_size*100)}cm"
+    #output_dir.mkdir(parents=True, exist_ok=True)
+    
+    output_dir = Path(cfg.cls_3d.output_dir)
+    print(f"Output directory: {output_dir}")
     
     # Start tracking memory usage
     threading.Thread(target=track_performance, args=(cfg,), daemon=True).start()
@@ -381,35 +403,40 @@ def main(cfg: DictConfig):
     # Clear the hydra config cache
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     
-    print("Importing the point cloud")
+    # Set up the logger
+    logger = lgr.logger_setup('main', output_dir / "logs" / "main.log")
+    
+    logger.info("Importing the point cloud")
     pcd = import_pcd(cfg.cls_3d.input_file_path)
+    logger.info("Creating the Open3D point cloud")
     o3d_pcd = create_o3d_pcd(pcd)
+    logger.info("Subsampling the point cloud")
     pcd_subsampled = subsample_pcd(o3d_pcd, pcd, cfg.cls_3d.voxel_size)
+    logger.info("Centering the point cloud")
     pcd_centered, scanner_pos = center_pcd(pcd_subsampled)
     
-    print(f"Compute kdtree")
+    logger.info(f"Compute kdtree")
     indices_flattened, kdtree_lists_breakpoints = compute_kdtree(pcd_centered, cfg.cls_3d.nghb_search_radius)
-    print(f"Compute scanner LOS")
+    logger.info(f"Compute scanner LOS")
     scanner_LOS = compute_scanner_LOS(pcd_centered)
-    print(f"Initialize attributes")
+    logger.info(f"Initialize attributes")
     attributes = initialize_attributes(cfg, pcd_centered)
-    print(f"Compute covariance attributes")
+    logger.info(f"Compute covariance attributes")
     columns = columns_for_numba(cfg)
-    print(f"Compute attributes")
+    logger.info(f"Compute attributes")
     normals, roughness, curvature, zenith_angle = compute_covariance_attributes(indices_flattened, kdtree_lists_breakpoints, pcd_centered, scanner_LOS)
-    print(f"Compute attributes")
+    logger.info(f"Compute attributes")
     attributes_dict = compute_attributes(attributes, columns, indices_flattened, kdtree_lists_breakpoints, pcd_centered, zenith_angle, roughness, normals, curvature)
     
     # Save the normals and roughness to a file along with xyz
+    logger.info(f'Saving the normals and roughness to a file')
     attributes_arr = np.array(list(attributes_dict.values())).T
     attributes_arr = np.c_[pcd_subsampled[:,:3], attributes_arr]
-    print(attributes_arr.shape)
+    logger.info(f'Attributes array shape: {attributes_arr.shape}')
     
+    logger.info(f'Saving the attributes to a file')
     column_names = list(attributes_dict.keys())
-    print(column_names)
-    print(len(column_names))
     column_names = ["x", "y", "z"] + column_names
-    print(len(column_names))
     
     column_names_dir = output_dir / "column_names"
     column_names_dir.mkdir(parents=False, exist_ok=True)
@@ -427,6 +454,7 @@ def main(cfg: DictConfig):
     attributes_out.close()
     
     if cfg.cls_3d.classification:
+        logger.info(f"Start classification")
         pcd_subsampled_classified = classification(cfg=cfg, pcd_subsampled=pcd_subsampled, 
                                                    attributes_dict=attributes_dict, 
                                                    model_filepath=cfg.cls_3d.model_path,
@@ -438,17 +466,26 @@ def main(cfg: DictConfig):
     end_time = time.time()
     execution_time = end_time - start_time
     print("Execution time of main is: ", execution_time, "seconds")
+    logger.info(f"Execution time of main is: {execution_time} seconds")
     
     # Save the execution time
     time_df = pd.DataFrame(data={"execution_time": [execution_time],
-                                 "radius (cm)": [cfg.cls_3d.nghb_search_radius*100],
-                                 "voxel_size (cm)": [cfg.cls_3d.voxel_size*100]})
-    
+                                "radius (cm)": [cfg.cls_3d.nghb_search_radius*100],
+                                "voxel_size (cm)": [cfg.cls_3d.voxel_size*100],
+                                "filename": [Path(cfg.cls_3d.input_file_path).stem]})
+
     time_df_out_path = output_dir / "performance_report"
     time_df_out_path.mkdir(parents=False, exist_ok=True)
-    time_df.to_csv(time_df_out_path / "execution_time.csv")
+    csv_file = time_df_out_path / "execution_time.csv"
+
+    # If the file exists, append without writing the header again, else write with header
+    if csv_file.exists():
+        time_df.to_csv(csv_file, mode='a', header=False, index=False)
+    else:
+        time_df.to_csv(csv_file, mode='w', header=True, index=False)
 
 
 if __name__=='__main__':
-    set_num_threads(int(6))
+    # Set the numba threads
+    set_num_threads(int(multiprocessing.cpu_count() - 1))
     main()

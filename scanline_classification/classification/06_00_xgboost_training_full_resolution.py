@@ -353,6 +353,7 @@ def main(cfg: DictConfig):
     logger.info("Saving the model...")
     Path(cfg.training.output_dir).mkdir(parents=False, exist_ok=True)
     model_path = Path(cfg.training.output_dir_model) / "xgb_model.joblib"
+    model_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(xgb_model, model_path)
     
     # Save the evaluation results to a csv file

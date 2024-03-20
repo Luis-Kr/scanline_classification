@@ -19,7 +19,8 @@ output_compressed: False
 # Attributes to be calculated that are taken into account for training the random forest model
 #attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
 #attributes: ["z","intensity","red","green","blue","rho","vert_angle","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
-attributes: ["intensity","red","green","blue","vert_angle","slope","curvature","roughness","nz"]
+#attributes: ["intensity","red","green","blue","vert_angle","slope","curvature","roughness","nz"]
+attributes: ["z","red","green","vert_angle","slope","curvature","roughness","nx","ny","nz"]
 
 
 # Scanline extraction
@@ -125,7 +126,8 @@ pcd_col_fmt:
   nz: "%1.4f"
 
 # Fixed statistics (changing the variables will not affect the output; keep the values as they are)
-statistics: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]
+#statistics: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]
+statistics: ["std","perc2nd","perc98th","perc25th","perc75th","skewness"]
 
 # Fixed attributes
 xyz_attributes: ["x_median_nn","y_median_nn","z_median_nn","x_perc2nd_nn","y_perc2nd_nn","z_perc2nd_nn","x_perc98th_nn","y_perc98th_nn","z_perc98th_nn"] 

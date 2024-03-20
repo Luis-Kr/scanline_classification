@@ -332,7 +332,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                                         rho_col=rho_col)
         
         #if least_squares_method:
-        slope_lstsq_i = calculate_slope_least_squares(scanline=scanline,
+        slope_lstsq_i, distance_to_line = calculate_slope_least_squares(scanline=scanline,
                                                 num_neighbors=k_neighbors,
                                                 x_col= x_col,
                                                 y_col= y_col,

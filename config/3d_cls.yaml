@@ -1,20 +1,50 @@
-input_file_path: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/03_labeled/SiteB_Scans_Global_I_RGB_RHV/SiteB_RHV_03_Labeled.txt"
-output_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/test"
-model_path: "..."
+# Local PC
+# input_file_path: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/03_labeled/SiteB_Scans_Global_I_RGB_RHV/SiteB_RHV_03_Labeled.txt"
+# output_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/test"
+# model_path: "..."
+
+# nghb_search_radius: 0.25
+# voxel_size: 0.03
+
+# classification: False
+# save_cls_result: False
+
+# sampling:
+#   attributes_path: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/column_names/column_names.pkl"
+#   files_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/attributes/validation"
+
+# evaluation:
+#   output_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/classification_result/3d_2d_comparison"
+#   testing_3d: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/classification_result/classified_pcd/testing"
+#   testing_2d: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/2d_classification/classified_pcd/testing"
+#   validation_3d: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/classification_result/classified_pcd/validation"
+#   validation_2d: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/2d_classification/classified_pcd/validation"
+
+
+# Remote PC
+input_file_path: "/DATA/Luis/thesis/scanline_classification/data/03_labeled/SiteD_RHV_01_Labeled.txt"
+output_dir: "/DATA/Luis/thesis/scanline_classification/data/final_results/5_comparison_3d_scanline_approach/cls_3d/radius0.5_voxel0.05"
+model_path: "/DATA/Luis/thesis/scanline_classification/models/xgb_training/model_60_features/xgb_model.joblib"
 
 nghb_search_radius: 0.25
-voxel_size: 0.03
+voxel_size: 0.1
 
 classification: False
-save_cls_result: False
+save_cls_result: True
 
 sampling:
-  attributes_path: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/column_names/column_names.pkl"
-  files_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/attributes/validation"
+  attributes_path: "column_names/column_names.pkl"
+  files_dir: "validation"
+
+training:
+  training_data_path: "training/merged/training_data_merged_frac.csv"
+  training_data_subsampled_dir: "training"
+  validation_file_frac: "validation/merged/validation_data_merged_frac.csv"
+  validation_data_dir: "validation"
 
 evaluation:
-  output_dir: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/classification_result/3d_2d_comparison"
-  testing_3d: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/classification_result/classified_pcd/testing"
-  testing_2d: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/2d_classification/classified_pcd/testing"
-  validation_3d: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/3d_classification/radius50cm_voxel5cm/classification_result/classified_pcd/validation"
-  validation_2d: "/Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/07_classification/2d_classification/classified_pcd/validation"
+  output_dir: "classification_result_3d_2d_comparison"
+  testing_3d: "classified_pcd/testing"
+  testing_2d: "/DATA/Luis/thesis/scanline_classification/data/07_classification/2d_classification/classified_pcd/testing"
+  validation_3d: "classified_pcd/validation"
+  validation_2d: "/DATA/Luis/thesis/scanline_classification/data/07_classification/2d_classification/classified_pcd/validation"

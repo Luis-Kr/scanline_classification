@@ -19,11 +19,11 @@ def load_data(cfg: DictConfig):
     Returns:
         pandas.DataFrame: A DataFrame containing the loaded data.
     """    
-    with open(cfg.cls_3d.sampling.attributes_path, 'rb') as file:
+    with open(Path(cfg.cls_3d.output_dir) / cfg.cls_3d.sampling.attributes_path, 'rb') as file:
         attribute_statistics = pickle.load(file)
 
     data_frames = []
-    for file_path in Path(cfg.cls_3d.sampling.files_dir).glob('*.gz'):
+    for file_path in (Path(cfg.cls_3d.output_dir) / cfg.cls_3d.sampling.files_dir).glob('*.gz'):
         print(f'Loading {file_path}')
         pcd_attributes_file = gzip.GzipFile(file_path, "r")
         pcd_attributes = np.load(pcd_attributes_file)
@@ -62,17 +62,16 @@ def save_data(cfg: DictConfig,
               data: pd.DataFrame):
     print(data['label_names'].value_counts())
     
-    output_dir = Path(cfg.cls_3d.sampling.files_dir) / "merged"
-    output_dir.mkdir(parents=False, exist_ok=True)
+    output_dir = Path(cfg.cls_3d.output_dir) / cfg.cls_3d.sampling.files_dir / "merged"
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     print(f'Saving data to {output_dir}')
-    output_dir.mkdir(parents=False, exist_ok=True)
     print(f'Shape of data: {data.shape}')
     
     if 'training' in cfg.cls_3d.sampling.files_dir:
         data.to_csv(output_dir / 'training_data_merged_frac.csv', index=False)
     else:
-        data.to_csv(output_dir / 'validation_data_merged_frac_test.csv', index=False)
+        data.to_csv(output_dir / 'validation_data_merged_frac.csv', index=False)
     
     
 @hydra.main(version_base=None, config_path="../../../config", config_name="main")

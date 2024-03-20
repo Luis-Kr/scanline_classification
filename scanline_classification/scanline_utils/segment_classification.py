@@ -41,12 +41,13 @@ def segment_classification(cfg: DictConfig,
     
     pcd_subsampled_classified = np.c_[pcd_subsampled[:, :3], pcd_subsampled[:, -1], predicted_labels]
     
-    if cfg.output_compressed:
-        np.savez_compressed(str(pcd_subsampled_classified_path) + "_subsampled_classified.npz", pcd_subsampled_classified)
-    else:
-        fmt = "%1.4f %1.4f %1.4f %u %u"
-        np.savetxt(str(pcd_subsampled_classified_path) + "_subsampled_classified.txt", pcd_subsampled_classified, delimiter=' ', fmt=fmt)
-    
+    if cfg.sgcl.save_pcd:
+        if cfg.output_compressed:
+            np.savez_compressed(str(pcd_subsampled_classified_path) + "_subsampled_classified.npz", pcd_subsampled_classified)
+        else:
+            fmt = "%1.4f %1.4f %1.4f %u %u"
+            np.savetxt(str(pcd_subsampled_classified_path) + "_subsampled_classified.txt", pcd_subsampled_classified, delimiter=' ', fmt=fmt)
+        
     return predicted_labels
 
 

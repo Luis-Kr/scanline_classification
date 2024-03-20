@@ -10,6 +10,7 @@ import utils.data_validation as dv
 from typing import List, Tuple
 import sys
 import numba
+from numba import set_num_threads
 import pandas as pd
 import time
 import csv
@@ -18,6 +19,9 @@ from datetime import datetime
 import pytz
 import psutil
 import threading
+import multiprocessing
+import platform
+from cpuinfo import get_cpu_info
 
 # Hydra and OmegaConf imports
 import hydra
@@ -284,11 +288,24 @@ def scanline_subsampling(cfg: DictConfig,
 
 def track_performance(cfg):
     performance_metrics_path = Path(cfg.dst_dir) / "performance_report" / 'performance_metrics.csv'
-    performance_metrics_path.parent.mkdir(parents=False, exist_ok=True)
+    performance_metrics_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Record the start time
+    start_time = time.time()
     
-    with open(performance_metrics_path, 'w', newline='') as file:
+    # if the file does not exist, create it and write the header
+    if not performance_metrics_path.exists():
+        with open(performance_metrics_path, 'w', newline='') as file:
+            writer = csv.writer(file, delimiter=',')
+            writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)", "Method", "File", "Seconds_Since_Start"])
+
+    # Open the file in append mode
+    with open(performance_metrics_path, 'a', newline='') as file:
         writer = csv.writer(file, delimiter=',')
-        writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)"])
+        
+        # Write the header only if the file is empty
+        if file.tell() == 0:
+            writer.writerow(["Timestamp", "CPU Usage (%)", "Memory Usage (GB)", "Method", "File", "Seconds_Since_Start"])
 
         while True:
             berlin_tz = pytz.timezone('Europe/Berlin')
@@ -296,9 +313,10 @@ def track_performance(cfg):
             timestamp = berlin_time.strftime("%Y-%m-%d %H:%M:%S")
             cpu_usage = psutil.cpu_percent(interval=1)
             memory_usage_gb = psutil.Process().memory_info().rss / (1024 ** 3)
+            seconds_since_start = time.time() - start_time  # Calculate the seconds since the start
 
             print(f'Timestamp: {timestamp}, CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage_gb:.3f} GB')
-            writer.writerow([timestamp, cpu_usage, memory_usage_gb])
+            writer.writerow([timestamp, cpu_usage, memory_usage_gb, "scanline_approach", Path(cfg.pcd_path).stem, round(seconds_since_start,0)])
 
             file.flush()  # Flush the file buffer
             os.fsync(file.fileno())  # Ensure it's written to disk
@@ -389,24 +407,64 @@ def main(cfg: DictConfig):
         logger.info('Assigning labels to the full resolution PCD...')
         pcd_classified = sgc.assign_labels(pcd=pcd_sorted, predicted_labels=predicted_labels)
         
-        if cfg.output_compressed:
-            logger.info(f'Saving the classified pcd: {str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.npz"))}')
-            np.savez_compressed(str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.npz")), pcd_classified)
-        else:
-            logger.info(f'Saving the classified pcd: {str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.txt"))}')
-            np.savetxt(str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.txt")), pcd_classified, fmt=fmt_pcd_classified, delimiter=' ')
-
+        if cfg.sgcl.save_pcd:
+            dv.check_path(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified)
+            
+            if cfg.output_compressed:
+                logger.info(f'Saving the classified pcd: {str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.npz"))}')
+                np.savez_compressed(str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.npz")), pcd_classified)
+            else:
+                logger.info(f'Saving the classified pcd: {str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.txt"))}')
+                np.savetxt(str(cfg.dst_dir / cfg.paths.segcl.dst_dir_pcd_classified / (str(cfg.filename) + "_classified.txt")), pcd_classified, fmt=fmt_pcd_classified, delimiter=' ')
 
     end_time = time.time()
     execution_time = end_time - start_time
     print("Execution time of main is: ", execution_time, "seconds")
     
     # Save the execution time
-    time_df = pd.DataFrame(data={"execution_time (s)": [execution_time]})
+    time_df = pd.DataFrame(data={"execution_time (s)": [execution_time],
+                                "file": [cfg.pcd_path.stem]})
+
+    csv_file = Path(cfg.dst_dir) / "performance_report" / "execution_time.csv"
+    #time_df_out_path.mkdir(parents=True, exist_ok=True)
+
+    # If the file exists, append without writing the header again, else write with header
+    if csv_file.exists():
+        time_df.to_csv(csv_file, mode='a', header=False, index=False)
+    else:
+        time_df.to_csv(csv_file, mode='w', header=True, index=False)
     
-    time_df_out_path = cfg.dst_dir / "performance_report"
-    time_df_out_path.mkdir(parents=False, exist_ok=True)
-    time_df.to_csv(time_df_out_path / "execution_time.csv")
+    
+    #-------------------------------------------------------------------------------------------------------------------
+    # Get system details
+    machine_info = platform.machine()
+    platform_info = platform.platform()
+    cpu_name = get_cpu_info()['brand_raw']
+    cpu_info = platform.processor()
+    ram_info = psutil.virtual_memory().total / (1024 ** 3)  # Convert bytes to GB
+    num_cores_used = int(multiprocessing.cpu_count() - 1)
+
+    # Create a DataFrame with the system details
+    system_details_df = pd.DataFrame(data={
+        "Machine Info": [machine_info],
+        "Platform Info": [platform_info],
+        "CPU Name": [cpu_name],
+        "CPU Info": [cpu_info],
+        "RAM Info (GB)": [ram_info],
+        "Number of Cores Used": [num_cores_used]
+    })
+
+    # Define the output path
+    system_details_path = Path(cfg.dst_dir) / "performance_report" / "system_details.csv"
+
+    # If the file exists, append without writing the header again, else write with header
+    if system_details_path.exists():
+        pass
+    else:
+        print("Writing the system details to a CSV file...")
+        system_details_df.to_csv(system_details_path, mode='w', header=True, index=False)
 
 if __name__=='__main__':
+    # Set the numba threads
+    set_num_threads(int(multiprocessing.cpu_count() - 1))
     main()

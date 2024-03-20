@@ -52,7 +52,7 @@ def prepare_attributes_and_format(cfg: DictConfig) -> Tuple[str, str, str, List[
                                                     pcd_col=cfg.pcd_col,
                                                     pcd_col_fmt=cfg.pcd_col_fmt)
     
-    fmt_scsb = " ".join(fmt for fmt in column_fmt for _ in range(9)) + " " + "%u" + " " + "%u" #9 because of the number of statistics
+    fmt_scsb = " ".join(fmt for fmt in column_fmt for _ in range(6)) + " " + "%u" + " " + "%u" #9 because of the number of statistics
     fmt_scsb = " ".join(["%1.4f"] * len(cfg.xyz_attributes)) + " " + fmt_scsb
 
     attribute_statistics = [f"{attribute}_{statistic}" for attribute in cfg.attributes for statistic in cfg.statistics]
