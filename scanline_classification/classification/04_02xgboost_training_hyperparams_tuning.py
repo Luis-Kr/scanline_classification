@@ -17,7 +17,7 @@ for i, (n_estimators, max_depth, learning_rate) in enumerate(combinations):
     print("---------------------------------------------------")
     print(f'Combination --- n_estimators:{n_estimators} | max_depth:{max_depth} | learning_rate:{learning_rate} --- {i+1}/{len(combinations)}')
     print("---------------------------------------------------")
-                
+
     command = (
     f"python scanline_classification/classification/xgboost_training_main.py "
     f"training.training_data_path={training_data} "
