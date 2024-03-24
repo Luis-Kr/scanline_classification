@@ -73,35 +73,35 @@ def pcd_preprocessing(cfg: DictConfig,
     else:
         logger.info('Calculating max point-to-point distances...')
         
-    max_distances, pcd_xyz_scanpos_centered, normals, scanner_pos = sce.kdtree_maxdist_normals(cfg=cfg,
-                                                                                  pcd=pcd[:, (cfg.pcd_col.x,
-                                                                                              cfg.pcd_col.y,
-                                                                                              cfg.pcd_col.z)],
-                                                                                  num_nearest_neighbors=cfg.sce.k_nn)
+    # max_distances, pcd_xyz_scanpos_centered, normals, scanner_pos = sce.kdtree_maxdist_normals(cfg=cfg,
+    #                                                                               pcd=pcd[:, (cfg.pcd_col.x,
+    #                                                                                           cfg.pcd_col.y,
+    #                                                                                           cfg.pcd_col.z)],
+    #                                                                               num_nearest_neighbors=cfg.sce.k_nn)
     
-    normals_xyz, normals = sce.align_normals_with_scanner_pos(cfg=cfg,
-                                                              pcd=pcd_xyz_scanpos_centered, 
-                                                              normals=normals)
+    # normals_xyz, normals = sce.align_normals_with_scanner_pos(cfg=cfg,
+    #                                                           pcd=pcd_xyz_scanpos_centered, 
+    #                                                           normals=normals)
 
-    # Bin the data
-    bins, binned_pcd = sce.bin_data(data=pcd[:, cfg.pcd_col.rho],
-                                    bin_size=cfg.sce.bin_size)
+    # # Bin the data
+    # bins, binned_pcd = sce.bin_data(data=pcd[:, cfg.pcd_col.rho],
+    #                                 bin_size=cfg.sce.bin_size)
 
-    # Calculate binned distances
-    binned_distances, binned_distances_std = sce.calculate_binned_distances(max_distances=max_distances, 
-                                                                            binned_data=binned_pcd, 
-                                                                            bins=bins)
+    # # Calculate binned distances
+    # binned_distances, binned_distances_std = sce.calculate_binned_distances(max_distances=max_distances, 
+    #                                                                         binned_data=binned_pcd, 
+    #                                                                         bins=bins)
 
-    # Interpolate distances
-    binned_distances_interpolated = sce.interpolate_distances(binned_distances)
-    binned_distances_std_interpolated = sce.interpolate_distances(binned_distances_std)
+    # # Interpolate distances
+    # binned_distances_interpolated = sce.interpolate_distances(binned_distances)
+    # binned_distances_std_interpolated = sce.interpolate_distances(binned_distances_std)
 
     # Add expected value distance to the point cloud data
-    logger.info('Adding the expected value of distance to the point cloud...')
-    pcd = sce.add_expected_value_distance(pcd=pcd, 
-                                          binned_pcd=binned_pcd, 
-                                          binned_distance_interp=binned_distances_interpolated,
-                                          binned_distances_interp_std=binned_distances_std_interpolated)
+    # logger.info('Adding the expected value of distance to the point cloud...')
+    # pcd = sce.add_expected_value_distance(pcd=pcd, 
+    #                                       binned_pcd=binned_pcd, 
+    #                                       binned_distance_interp=binned_distances_interpolated,
+    #                                       binned_distances_interp_std=binned_distances_std_interpolated)
 
     # Append the scanlines to the pcd
     pcd = sce.append_scanlines(pcd, scanlines)
@@ -115,99 +115,104 @@ def pcd_preprocessing(cfg: DictConfig,
             logger.info(f'Saving the scanlines: {str(cfg.dst_dir / cfg.paths.sce.dst_dir / cfg.filename) + "_scnln.txt"}')
             np.savetxt(str(cfg.dst_dir / cfg.paths.sce.dst_dir / cfg.filename) + "_scnln.txt", pcd, fmt=fmt_sce, delimiter=' ')
             
-    return pcd, pcd_xyz_scanpos_centered, normals_xyz, normals, scanner_pos
+    return pcd #pcd_xyz_scanpos_centered, normals_xyz, normals, scanner_pos
 
 
 def scanline_segmentation(cfg: DictConfig, 
                           fmt_scs: str,
                           pcd: np.ndarray, 
-                          pcd_xyz_scanpos_centered: np.ndarray,
-                          logger: logging.Logger, 
-                          normals_xyz: np.ndarray, 
-                          normals: np.ndarray):    
+                          logger: logging.Logger):    
     logger.info('Calculating segmentation metrics rho_diff, slope, curvature, roughness and normals...')
     
     # Sort the pcd by the vertical angle
-    pcd_sorted, sort_indices = scs.sort_scanline(pcd=pcd, 
-                                                 scanline_id_col=cfg.pcd_col.scanline_id, 
-                                                 vert_angle_col=cfg.pcd_col.vert_angle)
+    pcd_sorted, sort_indices = scs.sort_scanline(cfg=cfg, pcd=pcd)
     
-    scanline_intervals = scs.get_scanline_intervals(pcd=pcd_sorted, 
-                                                    scanline_id_col=cfg.pcd_col.scanline_id)
+    scanline_intervals = scs.get_scanline_intervals(pcd=pcd_sorted, scanline_id_col=cfg.pcd_col.scanline_id)
     
-    rho_diff, slope, slope_lstsq, curvature, curvature_lstsq, roughness = scs.calculate_segmentation_metrics(pcd=pcd_sorted, 
-                                                                                                            scanline_intervals=scanline_intervals,
-                                                                                                            x_col=cfg.pcd_col.x,
-                                                                                                            y_col=cfg.pcd_col.y,
-                                                                                                            z_col=cfg.pcd_col.z,
-                                                                                                            expected_value_col=cfg.pcd_col.expected_value,
-                                                                                                            rho_col=cfg.pcd_col.rho,
-                                                                                                            horiz_angle_col=cfg.pcd_col.horiz_angle,
-                                                                                                            neighborhood_multiplier=np.float64(cfg.scs.neighborhood_multiplier),
-                                                                                                            least_squares_method=cfg.scs.least_squares_method)
-    
+    rho_diff, slope_phi_rho, slope_D_Z, curvature_phi_rho, curvature_D_Z, roughness = scs.calculate_segmentation_metrics(pcd=pcd_sorted, 
+                                                                                                                            scanline_intervals=scanline_intervals,
+                                                                                                                            x_col=cfg.pcd_col.x,
+                                                                                                                            y_col=cfg.pcd_col.y,
+                                                                                                                            z_col=cfg.pcd_col.z,
+                                                                                                                            rho_col=cfg.pcd_col.rho,
+                                                                                                                            horiz_angle_col=cfg.pcd_col.horiz_angle)
+                    
     # Add the segmentation metrics to the point cloud data
     logger.info('Sorting the PCD...')
     if not cfg.sce.calculate_normals:
-        pcd_sorted = np.c_[pcd_sorted, rho_diff, slope_lstsq, curvature_lstsq, roughness, normals_xyz[sort_indices]]
+        pcd_sorted = np.c_[pcd_sorted, slope_D_Z, curvature_D_Z, roughness]
     else:
-        pcd_sorted = np.c_[pcd_sorted, rho_diff, slope_lstsq, curvature_lstsq, roughness, normals_xyz[sort_indices], normals[sort_indices]]
+        pcd_sorted = np.c_[pcd_sorted, slope_D_Z, curvature_D_Z, roughness]
     
-    logger.info('Scanline segmentation...')
-    segment_ids = scs.scanline_segmentation(pcd_sorted,
-                                            expected_value_col=cfg.pcd_col.expected_value,
-                                            expected_value_std_col=cfg.pcd_col.expected_value_std,
-                                            std_multiplier=cfg.scs.std_multiplier,
-                                            rho_diff_col=cfg.pcd_col.rho_diff,
-                                            slope_col=cfg.pcd_col.slope,
-                                            curvature_col=cfg.pcd_col.curvature,
-                                            slope_threshold=cfg.scs.slope_threshold,
-                                            curvature_threshold=cfg.scs.curvature_threshold)
+    # logger.info('Scanline segmentation...')
+    # segment_ids = scs.scanline_segmentation(pcd_sorted,
+    #                                         expected_value_col=cfg.pcd_col.expected_value,
+    #                                         expected_value_std_col=cfg.pcd_col.expected_value_std,
+    #                                         std_multiplier=cfg.scs.std_multiplier,
+    #                                         rho_diff_col=cfg.pcd_col.rho_diff,
+    #                                         slope_col=cfg.pcd_col.slope,
+    #                                         curvature_col=cfg.pcd_col.curvature,
+    #                                         slope_threshold=cfg.scs.slope_threshold,
+    #                                         curvature_threshold=cfg.scs.curvature_threshold)
     
     # Replace the slope_lstsq and curvature_lstsq with the original values
-    pcd_sorted[:, cfg.pcd_col.slope] = slope
-    pcd_sorted[:, cfg.pcd_col.curvature] = curvature
+    print(pcd_sorted.shape)
+    # pcd_sorted[:, 13] = slope_D_Z
+    # pcd_sorted[:, 14] = curvature_D_Z_i
     
-    # Split pcd_sorted into two parts
-    if not cfg.sce.calculate_normals:
-        pcd_sorted_left = pcd_sorted[:, :-3]
-        pcd_sorted_right = pcd_sorted[:, -3:]
-    else:
-        pcd_sorted_left = pcd_sorted[:, :-6]
-        pcd_sorted_right = pcd_sorted[:, -6:]
+    # # Split pcd_sorted into two parts
+    # if not cfg.sce.calculate_normals:
+    #     pcd_sorted_left = pcd_sorted[:, :-3]
+    #     pcd_sorted_right = pcd_sorted[:, -3:]
+    # else:
+    #     pcd_sorted_left = pcd_sorted[:, :-6]
+    #     pcd_sorted_right = pcd_sorted[:, -6:]
 
-    # Concatenate pcd_sorted_left, segment_ids, and pcd_sorted_right
-    pcd_segmented = np.c_[pcd_sorted_left, segment_ids, pcd_sorted_right]
+    # # Concatenate pcd_sorted_left, segment_ids, and pcd_sorted_right
+    # pcd_segmented = np.c_[pcd_sorted_left, segment_ids, pcd_sorted_right]
+
     
-    if cfg.sce.relocate_origin:
-        pcd_segmented = scs.recalculate_rho(cfg=cfg, 
-                                            pcd=pcd_segmented, 
-                                            pcd_xyz_scanpos_centered=pcd_xyz_scanpos_centered)
-
+    # if cfg.scs.save_pcd:
+    #     dv.check_path(cfg.dst_dir / cfg.paths.scs.dst_dir)
+        
+    #     segmentation_filename = str(cfg.filename) + "_Segmentation"
+    
+    #     if cfg.output_compressed:
+    #         if not cfg.sce.calculate_normals:
+    #             logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz"}')
+    #             np.savez_compressed(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz", pcd_segmented)
+    #         else:
+    #             logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz"}')
+    #             np.savez_compressed(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz", pcd_segmented)
+        
+    #     else:
+    #         if not cfg.sce.calculate_normals:
+    #             logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt"}')
+    #             np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_segmented, fmt=fmt_scs.rsplit(' ', 3)[0], delimiter=' ')
+    #         else:
+    #             logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt"}')
+    #             np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_segmented, fmt=fmt_scs, delimiter=' ')
+    
     
     if cfg.scs.save_pcd:
         dv.check_path(cfg.dst_dir / cfg.paths.scs.dst_dir)
         
-        if not cfg.sce.relocate_origin:
-                segmentation_filename = str(cfg.filename) + "_Segmentation"
-        else:
-            segmentation_filename = str(cfg.filename) + f"_Segmentation_ScanPosRelocated{cfg.sce.z_offset}m"
+        segmentation_filename = str(cfg.filename) + "_Segmentation"
     
         if cfg.output_compressed:
             if not cfg.sce.calculate_normals:
                 logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz"}')
-                np.savez_compressed(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz", pcd_segmented)
+                np.savez_compressed(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz", pcd_sorted)
             else:
                 logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz"}')
-                np.savez_compressed(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz", pcd_segmented)
+                np.savez_compressed(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".npz", pcd_sorted)
         
         else:
-            if not cfg.sce.calculate_normals:
-                logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt"}')
-                np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_segmented, fmt=fmt_scs.rsplit(' ', 3)[0], delimiter=' ')
-            else:
-                logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt"}')
-                np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_segmented, fmt=fmt_scs, delimiter=' ')
+            logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt"}')
+            np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_sorted, fmt="%1.6f", delimiter=' ')
+            
+    
+    sys.exit()
     
     return pcd_segmented, pcd_sorted
 
@@ -217,7 +222,6 @@ def scanline_subsampling(cfg: DictConfig,
                          fmt_scsb: str,
                          column_indices: List[int],
                          pcd: np.ndarray, 
-                         scanner_pos: np.ndarray,
                          logger: logging.Logger): 
     logger.info('Scanline subsampling: Calculating the segment attributes...')
     
@@ -315,7 +319,7 @@ def track_performance(cfg):
             memory_usage_gb = psutil.Process().memory_info().rss / (1024 ** 3)
             seconds_since_start = time.time() - start_time  # Calculate the seconds since the start
 
-            print(f'Timestamp: {timestamp}, CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage_gb:.3f} GB')
+            #print(f'Timestamp: {timestamp}, CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage_gb:.3f} GB')
             writer.writerow([timestamp, cpu_usage, memory_usage_gb, "scanline_approach", Path(cfg.pcd_path).stem, round(seconds_since_start,0)])
 
             file.flush()  # Flush the file buffer
@@ -362,25 +366,19 @@ def main(cfg: DictConfig):
     dv.check_attributes_and_normals(cfg=cfg)
     
     # PCD preprocessing
-    pcd, pcd_xyz_scanpos_centered, normals_xyz, normals, scanner_pos=pcd_preprocessing(cfg=cfg, 
-                                                                          fmt_sce=fmt_sce,
-                                                                          logger=logger)
+    pcd=pcd_preprocessing(cfg=cfg, fmt_sce=fmt_sce, logger=logger)
     
     # PCD scanline segmentation
     pcd_segmented, pcd_sorted=scanline_segmentation(cfg=cfg, 
                                                     fmt_scs=fmt_scs,
                                                     pcd=pcd, 
-                                                    pcd_xyz_scanpos_centered=pcd_xyz_scanpos_centered,
-                                                    logger=logger, 
-                                                    normals_xyz=normals_xyz, 
-                                                    normals=normals)
+                                                    logger=logger)
     
     # PCD scanline subsampling
     pcd_processed_segments, indices_per_class=scanline_subsampling(cfg=cfg, 
                                                                    fmt_scsb=fmt_scsb,
                                                                    column_indices=column_indices,
                                                                    pcd=pcd_segmented, 
-                                                                   scanner_pos=scanner_pos,
                                                                    logger=logger)
     
     if cfg.run_classification:

@@ -7,7 +7,7 @@ defaults:
   - cls_3d: ../3d_cls
 
 # Path where the point cloud is stored
-pcd_path: data/03_labeled/SiteD_RHV_05_Labeled.txt
+pcd_path: data/03_labeled/SiteA_Scans_Global_I_RGB_RHV/SiteA_RHV_01_Labeled.txt
 
 # Path for saving the output of the module
 dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/test_output3
@@ -49,7 +49,7 @@ scs:
   std_multiplier: 25
   neighborhood_multiplier: 2
   least_squares_method: True # If false, rise/run method is used for slope calculation
-  save_pcd: False
+  save_pcd: True
 
 # Subsampling
 scsb:
@@ -61,7 +61,7 @@ sgcl:
   save_pcd: False
 
 # Whether to run the classification or not
-run_classification: True
+run_classification: False
 
 # Whether to clear the logs or not
 clear_logs: False
@@ -80,9 +80,9 @@ pcd_col:
   vert_angle: 9
   point_counter: 10
   label: 11
-  expected_value: 12
-  expected_value_std: 13
-  scanline_id: 14
+  scanline_id: 12
+  expected_value: 13
+  expected_value_std: 14
   rho_diff: 15
   slope: 16
   curvature: 17
@@ -110,9 +110,9 @@ pcd_col_fmt:
   vert_angle: "%1.6f"
   point_counter: "%u"
   label: "%u"
+  scanline_id: "%u"
   expected_value: "%1.4f"
   expected_value_std: "%1.4f"
-  scanline_id: "%u"
   rho_diff: "%1.4f"
   slope: "%1.4f"
   curvature: "%1.4f"
@@ -126,8 +126,8 @@ pcd_col_fmt:
   nz: "%1.4f"
 
 # Fixed statistics (changing the variables will not affect the output; keep the values as they are)
-#statistics: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]
-statistics: ["std","perc2nd","perc98th","perc25th","perc75th","skewness"]
+statistics: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]
+#statistics: ["std","perc2nd","perc98th","perc25th","perc75th","skewness"]
 
 # Fixed attributes
 xyz_attributes: ["x_median_nn","y_median_nn","z_median_nn","x_perc2nd_nn","y_perc2nd_nn","z_perc2nd_nn","x_perc98th_nn","y_perc98th_nn","z_perc98th_nn"] 
