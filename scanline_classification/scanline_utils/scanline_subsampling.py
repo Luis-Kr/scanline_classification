@@ -134,15 +134,29 @@ def calculate_skewness(data: np.ndarray) -> float:
 #     return attributes
 
 
+# @njit()
+# def calculate_attributes(segment):
+#     attributes = np.zeros(6)
+#     attributes[0] = np.nanstd(segment)
+#     attributes[1] = np.nanpercentile(segment, 2)
+#     attributes[2] = np.nanpercentile(segment, 98)
+#     attributes[3] = np.nanpercentile(segment, 25)
+#     attributes[4] = np.nanpercentile(segment, 75)
+#     attributes[5] = calculate_skewness(segment)#.astype(np.float64)
+#     return attributes
+
 @njit()
 def calculate_attributes(segment):
-    attributes = np.zeros(6)
-    attributes[0] = np.nanstd(segment)
-    attributes[1] = np.nanpercentile(segment, 2)
-    attributes[2] = np.nanpercentile(segment, 98)
-    attributes[3] = np.nanpercentile(segment, 25)
-    attributes[4] = np.nanpercentile(segment, 75)
-    attributes[5] = calculate_skewness(segment)#.astype(np.float64)
+    attributes = np.zeros(9)
+    attributes[0] = np.nanmean(segment)
+    attributes[1] = np.nanvar(segment)
+    attributes[2] = np.nanstd(segment)
+    attributes[3] = np.nanmedian(segment)
+    attributes[4] = np.nanpercentile(segment, 2)
+    attributes[5] = np.nanpercentile(segment, 98)
+    attributes[6] = np.nanpercentile(segment, 25)
+    attributes[7] = np.nanpercentile(segment, 75)
+    attributes[8] = calculate_skewness(segment)#.astype(np.float64)
     return attributes
 
 
@@ -153,13 +167,13 @@ def calculate_segment_attributes(pcd: np.ndarray,
                                  label_col: int,
                                  columns) -> Tuple[np.ndarray, np.ndarray]:
     # Create an empty array to store the attributes
-    segment_attributes = np.zeros((1, (len(columns) * 6)+2))
+    segment_attributes = np.zeros((1, (len(columns) * 9)+2))
     gini_impurity_segment = np.empty(1)
 
     # Calculate the attributes for each column
     for i, col in enumerate(columns):
         segment = pcd[segment_indices, col]
-        segment_attributes[0, i*6:i*6+6] = calculate_attributes(segment)
+        segment_attributes[0, i*9:i*9+9] = calculate_attributes(segment)
         
     # Segment ID
     segment_id_segment = pcd[segment_indices, segment_id_col][0] # All segment IDs are the same
@@ -238,10 +252,10 @@ def process_segments(pcd: np.ndarray,
                                                                                             height_min=height_min)
         
         segment_attributes, gini_impurity_segment, num_points = calculate_segment_attributes(pcd=pcd,
-                                                                                            segment_indices=segment_indices,
-                                                                                            segment_id_col=segment_id_col,
-                                                                                            label_col=label_col,
-                                                                                            columns=column_indices)
+                                                                                             segment_indices=segment_indices,
+                                                                                             segment_id_col=segment_id_col,
+                                                                                             label_col=label_col,
+                                                                                             columns=column_indices)
                     
         # Add the combined attributes to the array
         processed_segments[i] = combine_segment_attributes(xyz_segment_median_nn, 

@@ -20,35 +20,22 @@ output_compressed: False
 #attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
 #attributes: ["z","intensity","red","green","blue","rho","vert_angle","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
 #attributes: ["intensity","red","green","blue","vert_angle","slope","curvature","roughness","nz"]
-attributes: ["z","red","green","vert_angle","slope","curvature","roughness","nx","ny","nz"]
+attributes: ["z","red","green","vert_angle","slope","curvature","roughness"] #"nx","ny","nz"
 
 
 # Scanline extraction
 sce:
   # Threshold (deg) value for splitting the scanlines (in relation to the vertical movement of the scanner)
   threshold: 80
-  # Bin size (meters) being used for density estimation
-  bin_size: 0.5
-  # Number of nearest neighbors being used for the density estimation
-  k_nn: 16
-  # If True, the origin of the point cloud is shifted up or down (will only affect rho and pseudo normals)
-  relocate_origin: False 
-  # If relocate_origin is True, the origin is shifted by this value (unit in meters; positive: up, negative: down)
-  z_offset: 30 
-  # If True, the "real" 3D normals are calculated using estimates of the local surface defined by a point and its neighbors
-  # Will slow down the process!
-  calculate_normals: True
+  calculate_normals: False
   # Whether or not the point cloud should be saved after this intermediate processing step
   save_pcd: False
 
 # Segmentation
 scs:
-  slope_threshold: 0.25 # Not being used for the moment
-  # Curvature threshold (deg) at which scanlines are split into segments
-  curvature_threshold: 30
-  std_multiplier: 25
-  neighborhood_multiplier: 2
-  least_squares_method: True # If false, rise/run method is used for slope calculation
+  curvature_threshold: 5
+  std_multiplier: 10
+  scanline_3D_attributes: True
   save_pcd: True
 
 # Subsampling
@@ -81,13 +68,11 @@ pcd_col:
   point_counter: 10
   label: 11
   scanline_id: 12
-  expected_value: 13
-  expected_value_std: 14
-  rho_diff: 15
-  slope: 16
-  curvature: 17
-  roughness: 18
-  segment_ids: 19
+  segment_ids: 13
+  rho_diff: 14
+  slope: 15
+  curvature: 16
+  roughness: 17
   nx_xyz: 20
   ny_xyz: 21
   nz_xyz: 22
@@ -111,13 +96,11 @@ pcd_col_fmt:
   point_counter: "%u"
   label: "%u"
   scanline_id: "%u"
-  expected_value: "%1.4f"
-  expected_value_std: "%1.4f"
+  segment_ids: "%u"
   rho_diff: "%1.4f"
   slope: "%1.4f"
   curvature: "%1.4f"
   roughness: "%1.8f"
-  segment_ids: "%u"
   nx_xyz: "%1.4f"
   ny_xyz: "%1.4f"
   nz_xyz: "%1.4f"
