@@ -118,22 +118,6 @@ def calculate_skewness(data: np.ndarray) -> float:
         
     return skewness
 
-
-# @njit()
-# def calculate_attributes(segment):
-#     attributes = np.zeros(9)
-#     attributes[0] = np.nanmean(segment)
-#     attributes[1] = np.nanvar(segment)
-#     attributes[2] = np.nanstd(segment)
-#     attributes[3] = np.nanmedian(segment)
-#     attributes[4] = np.nanpercentile(segment, 2)
-#     attributes[5] = np.nanpercentile(segment, 98)
-#     attributes[6] = np.nanpercentile(segment, 25)
-#     attributes[7] = np.nanpercentile(segment, 75)
-#     attributes[8] = calculate_skewness(segment)#.astype(np.float64)
-#     return attributes
-
-
 # @njit()
 # def calculate_attributes(segment):
 #     attributes = np.zeros(6)
@@ -176,7 +160,7 @@ def calculate_segment_attributes(pcd: np.ndarray,
         segment_attributes[0, i*9:i*9+9] = calculate_attributes(segment)
         
     # Segment ID
-    segment_id_segment = pcd[segment_indices, segment_id_col][0] # All segment IDs are the same
+    segment_id_segment = pcd[segment_indices, segment_id_col][0] # All segment IDs are the same, so take the first one
     segment_attributes[0, -2] = segment_id_segment
     
     # Count labels

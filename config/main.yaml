@@ -7,7 +7,7 @@ defaults:
   - cls_3d: ../3d_cls
 
 # Path where the point cloud is stored
-pcd_path: data/03_labeled/SiteA_Scans_Global_I_RGB_RHV/SiteA_RHV_01_Labeled.txt
+pcd_path: data/03_labeled/SiteD_Scans_Global_I_RGB_RHV/SiteD_RHV_01_Labeled.txt
 
 # Path for saving the output of the module
 dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/test_output3
@@ -22,12 +22,10 @@ output_compressed: False
 #attributes: ["intensity","red","green","blue","vert_angle","slope","curvature","roughness","nz"]
 attributes: ["z","red","green","vert_angle","slope","curvature","roughness"] #"nx","ny","nz"
 
-
 # Scanline extraction
 sce:
   # Threshold (deg) value for splitting the scanlines (in relation to the vertical movement of the scanner)
   threshold: 80
-  calculate_normals: False
   # Whether or not the point cloud should be saved after this intermediate processing step
   save_pcd: False
 
@@ -35,12 +33,12 @@ sce:
 scs:
   curvature_threshold: 5
   std_multiplier: 10
-  scanline_3D_attributes: True
-  save_pcd: True
+  scanline_3D_attributes: False
+  save_pcd: False
 
 # Subsampling
 scsb:
-  save_pcd: False
+  save_pcd: True
   save_gini_impurity: False
 
 # Segment classification
@@ -73,12 +71,8 @@ pcd_col:
   slope: 15
   curvature: 16
   roughness: 17
-  nx_xyz: 20
-  ny_xyz: 21
-  nz_xyz: 22
-  nx: 23
-  ny: 24
-  nz: 25
+  curvature_scanline_3D: 18
+  zenith_angle_scanline_3D: 19
 
 # Point cloud data column format 
 # np.savetxt fmt argument is set to '%.18e' by default, resulting in large files
@@ -101,12 +95,8 @@ pcd_col_fmt:
   slope: "%1.4f"
   curvature: "%1.4f"
   roughness: "%1.8f"
-  nx_xyz: "%1.4f"
-  ny_xyz: "%1.4f"
-  nz_xyz: "%1.4f"
-  nx: "%1.4f"
-  ny: "%1.4f"
-  nz: "%1.4f"
+  curvature_scanline_3D: "%1.4f"
+  zenith_angle_scanline_3D: "%1.4f"
 
 # Fixed statistics (changing the variables will not affect the output; keep the values as they are)
 statistics: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]

@@ -45,7 +45,8 @@ def prepare_attributes_and_format(cfg: DictConfig) -> Tuple[str, str, str, List[
     fmt_sce = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values())[:13])
     
     # fmt scanline segmentation
-    fmt_scs = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values()))
+    fmt_scs = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values())[:-2])
+    fmt_scs_scanline_3D = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values()))
     
     # fmt scanline subsampling
     column_indices, column_fmt = get_column_indices(attributes=cfg.attributes, 
@@ -64,16 +65,16 @@ def prepare_attributes_and_format(cfg: DictConfig) -> Tuple[str, str, str, List[
     
     fmt_pcd_classified = " ".join(fmt for fmt in list(cfg.pcd_col_fmt.values())[:12] + ["%u"])
 
-    return fmt_sce, fmt_scs, fmt_scsb, column_indices, fmt_pcd_classified
+    return fmt_sce, fmt_scs, fmt_scs_scanline_3D, fmt_scsb, column_indices, fmt_pcd_classified
         
         
 def check_attributes_and_normals(cfg: DictConfig):
-    if cfg.sce.calculate_normals == False and any(x in cfg.attributes for x in ["nx", "ny", "nz"]):
-        sys.exit("""Error: The attributes contain 'nx', 'ny', and 'nz'. 
-                 However, the calculate_normals is set to False. 
-                 Please set the calculate_normals to True or remove 'nx', 'ny', and 'nz' from the attributes.""")
-    elif cfg.sce.calculate_normals == True and not any(x in cfg.attributes for x in ["nx", "ny", "nz"]):
-        sys.exit("""Error: The attributes do not contain 'nx', 'ny', and 'nz'. \n
-                    However, the calculate_normals is set to True. \n
-                    Please set the calculate_normals to False or add 'nx', 'ny', and 'nz' to the attributes.""")
+    if cfg.scs.scanline_3D_attributes == False and any(x in cfg.attributes for x in ["curvature_scanline_3D", "zenith_angle_scanline_3D"]):
+        sys.exit("""Error: The attributes contain scanline 3D attributes. \n
+                 However, the calculation of 3D attributes is set to False. \n
+                 Please set the scanline_3D_attributes to True or remove 'curvature_scanline_3D' and 'zenith_angle_scanline_3D' from the attributes.""")
+    elif cfg.scs.scanline_3D_attributes == True and not any(x in cfg.attributes for x in ["curvature_scanline_3D", "zenith_angle_scanline_3D"]):
+        sys.exit("""Error: The attributes do not contain scanline 3D attributes. \n
+                    However, the calculation of 3D attributes is set to True.  \n
+                    Please set the scanline_3D_attributes to False or add 'curvature_scanline_3D' and 'zenith_angle_scanline_3D' to the attributes.""")
 

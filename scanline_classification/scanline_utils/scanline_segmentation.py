@@ -240,7 +240,7 @@ def scanline_neighborhood_points(pcd, i, theta_range_reference, knickpoints_dict
     scanline_neighborhood_minus = np.empty((0, 3), dtype=pcd.dtype)
     scanline_neighborhood_plus = np.empty((0, 3), dtype=pcd.dtype)
 
-    for j in range(1, 10):
+    for j in range(1, 11):
         scanline_minus = pcd[knickpoints_dict[scanline_id_arr[i - j]][0]:knickpoints_dict[scanline_id_arr[i - j]][1], :3]
         scanline_neighborhood_minus = np.concatenate((scanline_neighborhood_minus, scanline_minus[np.searchsorted(scanline_minus[:, 9], theta_range_reference), :3]))
         scanline_plus = pcd[knickpoints_dict[scanline_id_arr[i + j]][0]:knickpoints_dict[scanline_id_arr[i + j]][1], :3]
@@ -422,7 +422,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
         curvature_phi_rho[scanline_indices] = np.abs(calculate_curvature_gradient(arr=slope_phi_rho[scanline_indices]))
         curvature_D_Z[scanline_indices] = np.abs(calculate_curvature_gradient(arr=slope_D_Z[scanline_indices]))
 
-    return rho_diff, slope_D_Z, curvature_D_Z, roughness, mean_dist, std_dist, density, curvature_scanline_3D, zenith_angle_scanline_3D
+    return rho_diff, curvature_phi_rho, slope_D_Z, curvature_D_Z, roughness, mean_dist, std_dist, curvature_scanline_3D, zenith_angle_scanline_3D
 
 
 @njit(parallel=True)
