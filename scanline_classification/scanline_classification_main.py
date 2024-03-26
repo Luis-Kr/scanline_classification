@@ -22,6 +22,7 @@ import threading
 import multiprocessing
 import platform
 from cpuinfo import get_cpu_info
+import open3d as o3d
 
 # Hydra and OmegaConf imports
 import hydra
@@ -122,18 +123,19 @@ def scanline_segmentation(cfg: DictConfig,
     pcd_sorted, sort_indices = scs.sort_scanline(cfg=cfg, pcd=pcd)
     
     scanline_intervals_dict, scanline_id_arr = scs.get_scanline_intervals(pcd=pcd_sorted, scanline_id_col=cfg.pcd_col.scanline_id)
-    scanner_LOS = scs.compute_scanner_LOS(pcd)
     
-    rho_diff, slope_phi_rho, slope_D_Z, curvature_phi_rho, curvature_D_Z, roughness, mean_dist, std_dist, curvature_scanline_3D, roughness_scanline_3D = scs.calculate_segmentation_metrics(pcd=pcd_sorted, 
-                                                                                                                            scanline_intervals=scanline_intervals_dict,
-                                                                                                                            scanline_id_arr=scanline_id_arr,
-                                                                                                                            x_col=cfg.pcd_col.x,
-                                                                                                                            y_col=cfg.pcd_col.y,
-                                                                                                                            z_col=cfg.pcd_col.z,
-                                                                                                                            rho_col=cfg.pcd_col.rho,
-                                                                                                                            horiz_angle_col=cfg.pcd_col.horiz_angle,
-                                                                                                                            scanner_LOS=scanner_LOS,
-                                                                                                                            scanline_3D_attributes=cfg.scs.scanline_3D_attributes)
+    scanner_LOS = scs.compute_scanner_LOS(pcd_sorted)
+    
+    rho_diff, slope_D_Z, curvature_D_Z, roughness, mean_dist, std_dist, density, curvature_scanline_3D, zenith_angle_scanline_3D = scs.calculate_segmentation_metrics(pcd=pcd_sorted, 
+                                                                                                                                                                        scanline_intervals=scanline_intervals_dict,
+                                                                                                                                                                        scanline_id_arr=scanline_id_arr,
+                                                                                                                                                                        x_col=cfg.pcd_col.x,
+                                                                                                                                                                        y_col=cfg.pcd_col.y,
+                                                                                                                                                                        z_col=cfg.pcd_col.z,
+                                                                                                                                                                        rho_col=cfg.pcd_col.rho,
+                                                                                                                                                                        horiz_angle_col=cfg.pcd_col.horiz_angle,
+                                                                                                                                                                        scanner_LOS=scanner_LOS,
+                                                                                                                                                                        scanline_3D_attributes=cfg.scs.scanline_3D_attributes)
                     
     # Add the segmentation metrics to the point cloud data
     logger.info('Sorting the PCD...')
@@ -161,7 +163,16 @@ def scanline_segmentation(cfg: DictConfig,
 
     # Concatenate pcd_sorted_left, segment_ids, and pcd_sorted_right
     #pcd_segmented = np.c_[pcd_sorted, segment_ids, rho_diff, slope_D_Z, curvature_D_Z, roughness]
-    pcd_segmented = np.c_[pcd_sorted[:,:3], rho_diff, slope_D_Z, curvature_D_Z, roughness, curvature_scanline_3D, roughness_scanline_3D]
+    #pcd_segmented = np.c_[pcd_sorted[:,:3], rho_diff, slope_D_Z, curvature_D_Z, roughness, curvature_scanline_3D, roughness_scanline_3D]
+    pcd_segmented = np.c_[pcd_sorted[:,:3], density, density*3, curvature_scanline_3D, zenith_angle_scanline_3D, scanner_LOS[:,2]]
+    #pcd_segmented = np.c_[pcd_sorted[:,:3], scanner_LOS[sort_indices,:], scanner_LOS_zenith[sort_indices]]
+    
+    # Create open3d plot
+    # pcd_o3d = o3d.geometry.PointCloud()
+    # pcd_o3d.points = o3d.utility.Vector3dVector(pcd_xyz_centered[:,:3][::20])
+    # pcd_o3d.normals = o3d.utility.Vector3dVector(scanner_LOS[::20] / 20)
+    # o3d.visualization.draw_geometries([pcd_o3d])
+    
     
     # if cfg.scs.save_pcd:
     #     dv.check_path(cfg.dst_dir / cfg.paths.scs.dst_dir)
@@ -200,8 +211,10 @@ def scanline_segmentation(cfg: DictConfig,
         
         else:
             logger.info(f'Saving the pcd with segmentation metrics: {str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt"}')
-            np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_segmented, fmt="%1.6f", delimiter=' ')
+            np.savetxt(str(cfg.dst_dir / cfg.paths.scs.dst_dir / segmentation_filename) + ".txt", pcd_segmented, fmt="%1.4f", delimiter=' ')
             
+    
+    sys.exit()
     
     return pcd_segmented, pcd_sorted
 

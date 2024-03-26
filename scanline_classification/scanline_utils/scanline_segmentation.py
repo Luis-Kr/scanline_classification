@@ -222,103 +222,6 @@ def calculate_curvature_gradient(arr):
     return gradient
 
 
-# @njit()
-# def calculate_roughness(center_point: np.ndarray, 
-#                         points_left_side: np.ndarray, 
-#                         points_right_side: np.ndarray) -> np.ndarray:
-#     a = points_right_side[0, :] - points_left_side[0, :]
-#     vec_p1_p0 = center_point - points_left_side[0, :]
-#     distance = np.zeros(vec_p1_p0.shape[0])
-    
-#     # for v in range(vec_p1_p0.shape[0]):
-#     #     # Calculate the dot product of vec_p1_p0 and the direction vector
-#     #     dproduct_direction_vector = np.dot(vec_p1_p0[v], a[v])
-
-#     #     # Calculate the parameter t for the line equation
-#     #     t = dproduct_direction_vector / np.dot(a[v], a[v]) if np.dot(a[v], a[v]) != 0 else 0
-
-#     #     # Calculate the point on the line that is closest to the center point
-#     #     l1 = points_left_side[v] + t * a[v]
-
-#     #     # Calculate the distance from this point to the center point
-#     #     distance[v] = np.linalg.norm(l1 - center_point)
-
-            
-#     return np.nanmean(distance)
-
-
-
-# @njit()
-# def calculate_slope_least_squares(scanline: np.ndarray,
-#                                   num_neighbors: np.ndarray,
-#                                   max_num_neighbors: int,
-#                                   X_col: int,
-#                                   Y_col: int) -> np.ndarray:
-#     # Extract the rho and z coordinates from the scanline
-#     X = scanline[:, X_col]
-#     Y = scanline[:, Y_col]
-    
-#     # Merge the rho and z-coordinates into a single array
-#     scanline_XY = np.column_stack((X, Y))
-    
-#     # Pad the array at the beginning and end
-#     pad_scanline_XY = pad_reflect(scanline_XY, max_num_neighbors)
-    
-#     # Calculate the slope using the least-squares method for each point in the scanline
-#     slope = np.zeros(scanline.shape[0])
-#     for idx in range(scanline.shape[0]):
-#         n = int(idx + max_num_neighbors)
-#         slope[idx] = slope_lstsq_local_neighborhood(points_left_side=pad_scanline_XY[n-num_neighbors[idx]:n], 
-#                                                     points_right_side=pad_scanline_XY[n+1:n+num_neighbors[idx]+1])
-    
-#     return slope
-
-
-# @njit()
-# def calculate_curvature(slope_arr: np.ndarray, 
-#                         num_neighbors: np.ndarray,
-#                         max_num_neighbors: int) -> np.ndarray:
-#     # Pad the array at the beginning and end
-#     pad_slope_arr = pad_reflect(slope_arr, max_num_neighbors)
-    
-#     # Store the curvature values
-#     curvature = np.zeros(slope_arr.shape[0])
-    
-#     for idx in range(slope_arr.shape[0]):
-#         i = idx + max_num_neighbors
-#         curvature[idx] = np.median(np.abs(pad_slope_arr[i+1:i+num_neighbors[idx]+1] - pad_slope_arr[i-num_neighbors[idx]:i][::-1]))
-
-#     return curvature
-
-
-# @njit()
-# def calculate_curvature_gradient(slope: np.ndarray) -> np.ndarray:
-#     # Pad the array at the beginning and end
-#     pad_slope_arr = pad_reflect(slope_arr, max_num_neighbors)
-    
-#     # Calculate the curvature 
-#     curvature = numba_gradient(slope)
-    
-#     # Trim the gradient array to the original shape
-#     curvature = curvature[max_num_neighbors:-max_num_neighbors]
-    
-#     return curvature
-
-
-# @njit()
-# def calculate_roughness(scanline_xyz: np.ndarray,
-#                         padded_scanline: np.ndarray,
-#                         num_neighbors: np.ndarray,
-#                         max_num_neighbors: int) -> np.ndarray:
-#     roughness = np.zeros(scanline_xyz.shape[0])
-#     for idx in range(scanline_xyz.shape[0]):
-#         n = int(idx + max_num_neighbors)
-#         roughness[idx] = np.nanmean(calculate_distances_point_lines(center_point=padded_scanline[n], 
-#                                                                      points_left_side=padded_scanline[n-num_neighbors[idx]:n], 
-#                                                                      points_right_side=padded_scanline[n+1:n+num_neighbors[idx]+1]))
-    
-#     return roughness
-
 @njit()
 def distance_neighborhood_points(center_point, point_neighborhood_coarse):
     
@@ -333,11 +236,11 @@ def distance_neighborhood_points(center_point, point_neighborhood_coarse):
 
 
 @njit()
-def scanline_neighborhood_points(pcd, i, theta_range_reference, knickpoints_dict, scanline_id_arr, center_point):
+def scanline_neighborhood_points(pcd, i, theta_range_reference, knickpoints_dict, scanline_id_arr, center_point, neighborhood_search):
     scanline_neighborhood_minus = np.empty((0, 3), dtype=pcd.dtype)
     scanline_neighborhood_plus = np.empty((0, 3), dtype=pcd.dtype)
 
-    for j in range(1, 6):
+    for j in range(1, 10):
         scanline_minus = pcd[knickpoints_dict[scanline_id_arr[i - j]][0]:knickpoints_dict[scanline_id_arr[i - j]][1], :3]
         scanline_neighborhood_minus = np.concatenate((scanline_neighborhood_minus, scanline_minus[np.searchsorted(scanline_minus[:, 9], theta_range_reference), :3]))
         scanline_plus = pcd[knickpoints_dict[scanline_id_arr[i + j]][0]:knickpoints_dict[scanline_id_arr[i + j]][1], :3]
@@ -352,8 +255,8 @@ def scanline_neighborhood_points(pcd, i, theta_range_reference, knickpoints_dict
     difference = scanline_neighborhoods - center_point
     distances = np.sqrt(np.sum(difference**2, axis=1))
     
-    if scanline_neighborhoods.shape[0] >= 30:
-        nearest_neighborhood_points = scanline_neighborhoods[np.argsort(distances)][:30].copy()
+    if scanline_neighborhoods.shape[0] >= neighborhood_search:
+        nearest_neighborhood_points = scanline_neighborhoods[np.argsort(distances)][:neighborhood_search].copy()
     else:
         nearest_neighborhood_points = scanline_neighborhoods.copy()
     
@@ -361,20 +264,41 @@ def scanline_neighborhood_points(pcd, i, theta_range_reference, knickpoints_dict
 
 
 def compute_scanner_LOS(pcd: np.ndarray):
-    scanner_pos = np.mean(pcd[:,:3], axis=0)
-    pcd_xyz_centered = pcd[:,:3] - scanner_pos
+    scanner_pos = np.mean(pcd[:,:3], axis=0).copy()
+    pcd_xyz_centered = pcd[:,:3].copy() - scanner_pos
     scanner_LOS = pcd_xyz_centered[:, :3] / np.linalg.norm(pcd_xyz_centered[:,:3], axis=1, keepdims=True)
-    return -scanner_LOS 
+    return -scanner_LOS
 
 
-@njit()
-def compute_roughness(pcd: np.ndarray, normal: np.ndarray, point: np.ndarray) -> np.ndarray:
-    # Compute the mean of the neighborhood points along axis 0 
-    # Approximates the best fit plane to the neighborhood points
-    mean_pt_nbh = np.sum(pcd[:,:3], axis=0) / pcd.shape[0]
+# @njit()
+# def compute_roughness(pcd: np.ndarray, normal: np.ndarray, point: np.ndarray) -> np.ndarray:
+#     # Compute the mean of the neighborhood points along axis 0 
+#     # Approximates the best fit plane to the neighborhood points
+#     mean_pt_nbh = np.sum(pcd[:,:3], axis=0) / pcd.shape[0]
     
-    # Compute the distance from the points to the plane
-    return np.abs(np.dot(point - mean_pt_nbh, normal))
+#     # Compute the distance from the points to the plane
+#     return np.abs(np.dot(point - mean_pt_nbh, normal))
+
+
+# @njit()
+# def calc_R(c, x, y):
+#     """ calculate the distance of each 2D points from the center c=(xc, yc) """
+#     return np.sqrt((x-c[0])**2 + (y-c[1])**2)
+
+
+# @njit()
+# def calculate_curvature(nearest_neighborhood_points):
+#     X = nearest_neighborhood_points[:, 0].copy()
+#     Y = nearest_neighborhood_points[:, 1].copy()
+#     A = np.column_stack((X, Y, np.ones(X.shape[0])))
+#     B = X**2 + Y**2
+#     center = np.linalg.lstsq(A, B)[0] 
+#     xc, yc = center[0]/2, center[1]/2
+#     Ri = calc_R([xc, yc], X, Y)
+#     R = Ri.mean()
+#     curvature = 1 / R
+#     curvature = curvature if curvature < 500 else 0
+#     return curvature
 
 
 @njit(parallel=True)
@@ -402,7 +326,6 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
     if scanline_3D_attributes:
         normals_scanline_3D = np.zeros((pcd.shape[0], 3))
         curvature_scanline_3D = np.zeros(pcd.shape[0])
-        roughness_scanline_3D = np.zeros(pcd.shape[0])
         zenith_angle_scanline_3D = np.zeros(pcd.shape[0])
     
     # Calculate the segmentation metrics for each scanline
@@ -430,6 +353,7 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
                 density_phirho_i = 11
             if density_phirho_i > 17:
                 density_phirho_i = 17
+                
             if density_dz_i < 4:
                 density_dz_i = 4
             if density_dz_i > 20:
@@ -467,28 +391,38 @@ def calculate_segmentation_metrics(pcd: np.ndarray,
             density[scanline_intervals[scanline_id_arr[i]][0] + point_idx] = density_i
             
             if scanline_3D_attributes:
-                nearest_neighborhood_points = scanline_neighborhood_points(pcd, i, theta_range_reference, scanline_intervals, scanline_id_arr, pcd[scanline_intervals[scanline_id_arr[i]][0] + point_idx, :3])
-                
+                density_3D = np.round(density_i)*3
+            
+                # Adjust the density values range
+                if density_3D < 10:
+                    density_3D = 10
+                if density_3D > 100:
+                    density_3D = 100
+                    
+                nearest_neighborhood_points = scanline_neighborhood_points(pcd, 
+                                                                           i, 
+                                                                           theta_range_reference, 
+                                                                           scanline_intervals, 
+                                                                           scanline_id_arr, 
+                                                                           pcd[scanline_intervals[scanline_id_arr[i]][0] + point_idx, :3],
+                                                                           int(density_3D))
+
                 if nearest_neighborhood_points.shape[0] > 3:
-                    center_pos = np.array([nearest_neighborhood_points[:, 0].mean(), nearest_neighborhood_points[:, 1].mean(), nearest_neighborhood_points[:, 2].mean()])
-                    nearest_neighborhood_points -= center_pos
+                    nearest_neighborhood_points -= np.array([nearest_neighborhood_points[:, 0].mean(), nearest_neighborhood_points[:, 1].mean(), nearest_neighborhood_points[:, 2].mean()])
+                    
                     eigenvalues, eigenvectors = np.linalg.eigh(np.cov(nearest_neighborhood_points.T))
                     normal = eigenvectors[:, 0]
-
                     if np.dot(normal, scanner_LOS[scanline_intervals[scanline_id_arr[i]][0] + point_idx, :3]) < 0:
                         normal *= -1
-                        
-                    curvature = np.min(eigenvalues) / np.sum(eigenvalues)
 
-                    normals_scanline_3D[scanline_intervals[scanline_id_arr[i]][0] + point_idx, :] = normal 
-                    curvature_scanline_3D[scanline_intervals[scanline_id_arr[i]][0] + point_idx] = curvature
-                    roughness_scanline_3D[scanline_intervals[scanline_id_arr[i]][0] + point_idx] = compute_roughness(nearest_neighborhood_points, normal, pcd[scanline_intervals[scanline_id_arr[i]][0] + point_idx, :3])
+                    normals_scanline_3D[scanline_intervals[scanline_id_arr[i]][0] + point_idx, :] = normal
+                    curvature_scanline_3D[scanline_intervals[scanline_id_arr[i]][0] + point_idx] = np.min(eigenvalues) / np.sum(eigenvalues)
                     zenith_angle_scanline_3D[scanline_intervals[scanline_id_arr[i]][0] + point_idx] = np.degrees(np.arccos(normal[2]))
                     
         curvature_phi_rho[scanline_indices] = np.abs(calculate_curvature_gradient(arr=slope_phi_rho[scanline_indices]))
         curvature_D_Z[scanline_indices] = np.abs(calculate_curvature_gradient(arr=slope_D_Z[scanline_indices]))
 
-    return rho_diff, slope_phi_rho, slope_D_Z, curvature_phi_rho, curvature_D_Z, roughness, mean_dist, std_dist, curvature_scanline_3D, roughness_scanline_3D
+    return rho_diff, slope_D_Z, curvature_D_Z, roughness, mean_dist, std_dist, density, curvature_scanline_3D, zenith_angle_scanline_3D
 
 
 @njit(parallel=True)
