@@ -69,11 +69,11 @@ def prepare_attributes_and_format(cfg: DictConfig) -> Tuple[str, str, str, List[
         
         
 def check_attributes_and_normals(cfg: DictConfig):
-    if cfg.scs.scanline_3D_attributes == False and any(x in cfg.attributes for x in ["curvature_scanline_3D", "zenith_angle_scanline_3D"]):
+    if cfg.scs.scanline_3D_attributes == False and any(x in cfg.attributes for x in ["curvature_change", "normal_zenith_angle"]):
         sys.exit("""Error: The attributes contain scanline 3D attributes. \n
                  However, the calculation of 3D attributes is set to False. \n
                  Please set the scanline_3D_attributes to True or remove 'curvature_scanline_3D' and 'zenith_angle_scanline_3D' from the attributes.""")
-    elif cfg.scs.scanline_3D_attributes == True and not any(x in cfg.attributes for x in ["curvature_scanline_3D", "zenith_angle_scanline_3D"]):
+    elif cfg.scs.scanline_3D_attributes == True and not any(x in cfg.attributes for x in ["curvature_change", "normal_zenith_angle"]):
         sys.exit("""Error: The attributes do not contain scanline 3D attributes. \n
                     However, the calculation of 3D attributes is set to True.  \n
                     Please set the scanline_3D_attributes to False or add 'curvature_scanline_3D' and 'zenith_angle_scanline_3D' to the attributes.""")

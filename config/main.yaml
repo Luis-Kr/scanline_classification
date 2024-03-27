@@ -7,7 +7,7 @@ defaults:
   - cls_3d: ../3d_cls
 
 # Path where the point cloud is stored
-pcd_path: data/03_labeled/SiteD_Scans_Global_I_RGB_RHV/SiteD_RHV_01_Labeled.txt
+pcd_path: data/03_labeled/SiteD_Scans_Global_I_RGB_RHV/SiteD_RHV_06_Labeled.txt
 
 # Path for saving the output of the module
 dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/data/test_output3
@@ -17,10 +17,8 @@ dst_dir: /Users/luiskremer/Code/Uni/Code_Master_RSIV/019_scanline_segmentation/d
 output_compressed: False 
 
 # Attributes to be calculated that are taken into account for training the random forest model
-#attributes: ["intensity","red","green","blue","rho","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz"]
-#attributes: ["z","intensity","red","green","blue","rho","vert_angle","slope","curvature","roughness","nx_xyz","ny_xyz","nz_xyz","nx","ny","nz"]
-#attributes: ["intensity","red","green","blue","vert_angle","slope","curvature","roughness","nz"]
-attributes: ["z","red","green","vert_angle","slope","curvature","roughness"] #"nx","ny","nz"
+attributes: ["z","intensity","red","green","blue","rho","vert_angle","slope","curvature","roughness","curvature_change","normal_zenith_angle"]
+#attributes: ["z","red","green","vert_angle","slope","curvature","roughness"] #"nx","ny","nz"
 
 # Scanline extraction
 sce:
@@ -33,8 +31,8 @@ sce:
 scs:
   curvature_threshold: 5
   std_multiplier: 10
-  scanline_3D_attributes: False
-  save_pcd: False
+  scanline_3D_attributes: True
+  save_pcd: True
 
 # Subsampling
 scsb:
@@ -71,8 +69,8 @@ pcd_col:
   slope: 15
   curvature: 16
   roughness: 17
-  curvature_scanline_3D: 18
-  zenith_angle_scanline_3D: 19
+  curvature_change: 18
+  normal_zenith_angle: 19
 
 # Point cloud data column format 
 # np.savetxt fmt argument is set to '%.18e' by default, resulting in large files
@@ -95,8 +93,8 @@ pcd_col_fmt:
   slope: "%1.4f"
   curvature: "%1.4f"
   roughness: "%1.8f"
-  curvature_scanline_3D: "%1.4f"
-  zenith_angle_scanline_3D: "%1.4f"
+  curvature_change: "%1.4f"
+  normal_zenith_angle: "%1.4f"
 
 # Fixed statistics (changing the variables will not affect the output; keep the values as they are)
 statistics: ["mean","var","std","median","perc2nd","perc98th","perc25th","perc75th","skewness"]
